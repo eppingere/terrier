@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "common/performance_counter.h"
+#include "common/shared_latch.h"
 #include "storage/projected_columns.h"
 #include "storage/storage_defs.h"
 #include "storage/tuple_access_strategy.h"
@@ -80,7 +81,7 @@ class DataTable {
      */
     bool operator==(const SlotIterator &other) const {
       // TODO(Tianyu): I believe this is enough?
-      return current_slot_ == other.current_slot_;
+      return current_slot_ == other.current_slot_; // maybe check same table
     }
 
     /**
@@ -157,7 +158,7 @@ class DataTable {
    * @return the first tuple slot contained in the data table
    */
   SlotIterator begin() const {  // NOLINT for STL name compability
-    common::SpinLatch::ScopedSpinLatch guard(&blocks_latch_);
+    common::SharedLatch::ScopedSharedLatch guard(&blocks_latch_);
     return {this, blocks_.begin(), 0};
   }
 
@@ -245,10 +246,13 @@ class DataTable {
   // might be on it
   std::list<RawBlock *> blocks_;
   // latch used to protect block list
-  mutable common::SpinLatch blocks_latch_;
+  mutable common::SharedLatch blocks_latch_;
   // latch used to protect insertion_head_
   mutable common::SpinLatch header_latch_;
   std::list<RawBlock *>::iterator insertion_head_;
+  std::atomic<std::list<RawBlock *>::iterator> end_;
+
+  std::atomic_bool empty_;
   // Check if we need to advance the insertion_head_
   // This function uses header_latch_ to ensure correctness
   void CheckMoveHead(std::list<RawBlock *>::iterator block);

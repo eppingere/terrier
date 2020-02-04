@@ -7,24 +7,28 @@
 #include "storage/storage_util.h"
 #include "transaction/transaction_context.h"
 #include "transaction/transaction_util.h"
+#include "common/shared_latch.h"
 
 namespace terrier::storage {
 DataTable::DataTable(BlockStore *const store, const BlockLayout &layout, const layout_version_t layout_version)
-    : block_store_(store), layout_version_(layout_version), accessor_(layout) {
+    : block_store_(store), layout_version_(layout_version), accessor_(layout), empty_(true) {
   TERRIER_ASSERT(layout.AttrSize(VERSION_POINTER_COLUMN_ID) == 8,
                  "First column must have size 8 for the version chain.");
   TERRIER_ASSERT(layout.NumColumns() > NUM_RESERVED_COLUMNS,
                  "First column is reserved for version info, second column is reserved for logical delete.");
+
   if (block_store_ != nullptr) {
     RawBlock *new_block = NewBlock();
     // insert block
     blocks_.push_back(new_block);
+    empty_ = false;
   }
   insertion_head_ = blocks_.begin();
+  end_ = blocks_.end();
 }
 
 DataTable::~DataTable() {
-  common::SpinLatch::ScopedSpinLatch guard(&blocks_latch_);
+  common::SharedLatch::ScopedExclusiveLatch guard(&blocks_latch_);
   for (RawBlock *block : blocks_) {
     StorageUtil::DeallocateVarlens(block, accessor_);
     for (col_id_t i : accessor_.GetBlockLayout().Varlens())
@@ -59,11 +63,11 @@ void DataTable::Scan(const common::ManagedPointer<transaction::TransactionContex
 }
 
 DataTable::SlotIterator &DataTable::SlotIterator::operator++() {
-  common::SpinLatch::ScopedSpinLatch guard(&table_->blocks_latch_);
   // Jump to the next block if already the last slot in the block.
   if (current_slot_.GetOffset() == table_->accessor_.GetBlockLayout().NumSlots() - 1) {
     ++block_;
     // Cannot dereference if the next block is end(), so just use nullptr to denote
+    common::SharedLatch::ScopedSharedLatch guard(&table_->blocks_latch_);
     current_slot_ = {block_ == table_->blocks_.end() ? nullptr : *block_, 0};
   } else {
     current_slot_ = {*block_, current_slot_.GetOffset() + 1};
@@ -72,17 +76,16 @@ DataTable::SlotIterator &DataTable::SlotIterator::operator++() {
 }
 
 DataTable::SlotIterator DataTable::end() const {  // NOLINT for STL name compability
-  common::SpinLatch::ScopedSpinLatch guard(&blocks_latch_);
   // TODO(Tianyu): Need to look in detail at how this interacts with compaction when that gets in.
 
   // The end iterator could either point to an unfilled slot in a block, or point to nothing if every block in the
   // table is full. In the case that it points to nothing, we will use the end-iterator of the blocks list and
   // 0 to denote that this is the case. This solution makes increment logic simple and natural.
-  if (blocks_.empty()) return {this, blocks_.end(), 0};
-  auto last_block = --blocks_.end();
+  if (empty_) return {this, end_.load(), 0};
+  auto last_block = --end_.load();
   uint32_t insert_head = (*last_block)->GetInsertHead();
   // Last block is full, return the default end iterator that doesn't point to anything
-  if (insert_head == accessor_.GetBlockLayout().NumSlots()) return {this, blocks_.end(), 0};
+  if (insert_head == accessor_.GetBlockLayout().NumSlots()) return {this, ++last_block, 0};
   // Otherwise, insert head points to the slot that will be inserted next, which would be exactly what we want.
   return {this, last_block, insert_head};
 }
@@ -141,9 +144,11 @@ void DataTable::CheckMoveHead(std::list<RawBlock *>::iterator block) {
   if (insertion_head_ == blocks_.end()) {
     RawBlock *new_block = NewBlock();
     // take latch
-    common::SpinLatch::ScopedSpinLatch guard_block(&blocks_latch_);
+    common::SharedLatch::ScopedExclusiveLatch guard_block(&blocks_latch_);
     // insert block
     blocks_.push_back(new_block);
+    end_ = blocks_.end();
+    empty_ = false;
     // set insertion header to --end()
     insertion_head_ = --blocks_.end();
   }
@@ -173,9 +178,11 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
       // No need to flip the busy status bit
       accessor_.Allocate(new_block, &result);
       // take latch
-      common::SpinLatch::ScopedSpinLatch guard(&blocks_latch_);
+      common::SharedLatch::ScopedExclusiveLatch guard(&blocks_latch_);
       // insert block
       blocks_.push_back(new_block);
+      end_ = blocks_.end();
+      empty_ = false;
       block = --blocks_.end();
       break;
     }
