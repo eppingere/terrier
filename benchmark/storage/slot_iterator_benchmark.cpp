@@ -55,8 +55,8 @@ class SlotIteratorBenchmark : public benchmark::Fixture {
       storage::ProjectedRowInitializer::Create(layout_, StorageTestUtil::ProjectionListAllColumns(layout_));
 
   // Workload
-  const uint32_t num_inserts_ = 10000000;
-  const uint32_t num_reads_ = 10000000;
+  const uint32_t num_inserts_ = 10;
+  const uint32_t num_reads_ = 10;
   const uint64_t buffer_pool_reuse_limit_ = 10000000;
 
   // Test infrastructure
@@ -97,6 +97,9 @@ BENCHMARK_DEFINE_F(SlotIteratorBenchmark, ConcurrentSlotIterators)(benchmark::St
     while (it != read_table.end()) {
       num_reads++;
       it++;
+      if (num_reads % 10000000 == 0) {
+        printf("%d\n", num_reads);
+      }
     }
     EXPECT_EQ(num_reads, num_reads_);
   };
