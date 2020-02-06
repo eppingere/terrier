@@ -93,18 +93,18 @@ class DataTable {
 
    private:
     friend class DataTable;
-    /**
-     * @warning MUST BE CALLED ONLY WHEN CALLER HOLDS LOCK TO THE LIST OF RAW BLOCKS IN THE DATA TABLE
-     */
-    SlotIterator(const DataTable *table, std::list<RawBlock *>::const_iterator block, uint32_t offset_in_block)
-        : table_(table), block_(block) {
-      current_slot_ = {block == table->blocks_.end() ? nullptr : *block, offset_in_block};
+
+    SlotIterator(const DataTable *table, uint64_t offset, uint32_t offset_in_block)
+        : table_(table), offset_(offset) {
+      block_ = offset_ >= table->offset_.load() ? nullptr : table->array_[offset_].load();
+      current_slot_ = {block_, offset_in_block};
     }
 
     // TODO(Tianyu): Can potentially collapse this information into the RawBlock so we don't have to hold a pointer to
     // the table anymore. Right now we need the table to know how many slots there are in the block
     const DataTable *table_;
-    std::list<RawBlock *>::const_iterator block_;
+    RawBlock *block_;
+    uint64_t offset_;
     TupleSlot current_slot_;
   };
   /**
@@ -158,8 +158,7 @@ class DataTable {
    * @return the first tuple slot contained in the data table
    */
   SlotIterator begin() const {  // NOLINT for STL name compability
-    common::SharedLatch::ScopedSharedLatch guard(&blocks_latch_);
-    return {this, blocks_.begin(), 0};
+    return {this, 0, 0};
   }
 
   /**
@@ -235,6 +234,9 @@ class DataTable {
   BlockStore *const block_store_;
   const layout_version_t layout_version_;
   const TupleAccessStrategy accessor_;
+  const uint64_t ARRAY_START_SIZE = 8;
+  const uint64_t ARRAY_RESIZE_FACTOR = 2;
+
 
   // TODO(Tianyu): For now, on insertion, we simply sequentially go through a block and allocate a
   // new one when the current one is full. Needless to say, we will need to revisit this when extending GC to handle
@@ -244,18 +246,13 @@ class DataTable {
   // negligible difference in insert performance (within margin of error) when benchmarked.
   // We also might need our own implementation because we need to handle GC of an unlinked block, as a sequential scan
   // might be on it
-  std::list<RawBlock *> blocks_;
-  // latch used to protect block list
-  mutable common::SharedLatch blocks_latch_;
-  // latch used to protect insertion_head_
-  mutable common::SpinLatch header_latch_;
-  std::list<RawBlock *>::iterator insertion_head_;
-  std::atomic<std::list<RawBlock *>::iterator> end_;
+  std::atomic_uint64_t offset_, insert_index_, array_ref_counter_, size_;
+  std::atomic<std::atomic<RawBlock *> *> array_;
 
-  std::atomic_bool empty_;
+  std::atomic_bool resizing_;
+  std::mutex resizing_mux_;
+  std::condition_variable done_resizing_;
   // Check if we need to advance the insertion_head_
-  // This function uses header_latch_ to ensure correctness
-  void CheckMoveHead(std::list<RawBlock *>::iterator block);
   mutable DataTableCounter data_table_counter_;
 
   // A templatized version for select, so that we can use the same code for both row and column access.

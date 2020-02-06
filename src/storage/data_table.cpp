@@ -3,38 +3,39 @@
 #include <list>
 
 #include "common/allocator.h"
+#include "common/shared_latch.h"
 #include "storage/block_access_controller.h"
 #include "storage/storage_util.h"
 #include "transaction/transaction_context.h"
 #include "transaction/transaction_util.h"
-#include "common/shared_latch.h"
 
 namespace terrier::storage {
 DataTable::DataTable(BlockStore *const store, const BlockLayout &layout, const layout_version_t layout_version)
-    : block_store_(store), layout_version_(layout_version), accessor_(layout), empty_(true) {
+    : block_store_(store), layout_version_(layout_version), accessor_(layout), offset_(0), insert_index_(0),
+      array_ref_counter_(0), size_(0), resizing_(false) {
   TERRIER_ASSERT(layout.AttrSize(VERSION_POINTER_COLUMN_ID) == 8,
                  "First column must have size 8 for the version chain.");
   TERRIER_ASSERT(layout.NumColumns() > NUM_RESERVED_COLUMNS,
                  "First column is reserved for version info, second column is reserved for logical delete.");
 
+  size_ = ARRAY_START_SIZE;
+  array_ = new std::atomic<RawBlock *>[size_];
   if (block_store_ != nullptr) {
-    RawBlock *new_block = NewBlock();
-    // insert block
-    blocks_.push_back(new_block);
-    empty_ = false;
+    offset_ = size_ / 2;
+    for (uint64_t i = 0; i < offset_; ++i) {
+      array_[i] = NewBlock();
+    }
   }
-  insertion_head_ = blocks_.begin();
-  end_ = blocks_.end();
 }
 
 DataTable::~DataTable() {
-  common::SharedLatch::ScopedExclusiveLatch guard(&blocks_latch_);
-  for (RawBlock *block : blocks_) {
-    StorageUtil::DeallocateVarlens(block, accessor_);
+  for (uint64_t idx = 0; idx < offset_; ++idx) {
+    StorageUtil::DeallocateVarlens(array_[idx], accessor_);
     for (col_id_t i : accessor_.GetBlockLayout().Varlens())
-      accessor_.GetArrowBlockMetadata(block).GetColumnInfo(accessor_.GetBlockLayout(), i).Deallocate();
-    block_store_->Release(block);
+      accessor_.GetArrowBlockMetadata(array_[idx]).GetColumnInfo(accessor_.GetBlockLayout(), i).Deallocate();
+    block_store_->Release(array_[idx]);
   }
+  delete array_;
 }
 
 bool DataTable::Select(const common::ManagedPointer<transaction::TransactionContext> txn, TupleSlot slot,
@@ -65,12 +66,12 @@ void DataTable::Scan(const common::ManagedPointer<transaction::TransactionContex
 DataTable::SlotIterator &DataTable::SlotIterator::operator++() {
   // Jump to the next block if already the last slot in the block.
   if (current_slot_.GetOffset() == table_->accessor_.GetBlockLayout().NumSlots() - 1) {
-    ++block_;
+    ++offset_;
+    block_ = offset_ >= table_->offset_.load() ? nullptr : table_->array_[offset_].load();
     // Cannot dereference if the next block is end(), so just use nullptr to denote
-    common::SharedLatch::ScopedSharedLatch guard(&table_->blocks_latch_);
-    current_slot_ = {block_ == table_->blocks_.end() ? nullptr : *block_, 0};
+    current_slot_ = {block_, 0};
   } else {
-    current_slot_ = {*block_, current_slot_.GetOffset() + 1};
+    current_slot_ = {block_, current_slot_.GetOffset() + 1};
   }
   return *this;
 }
@@ -81,13 +82,14 @@ DataTable::SlotIterator DataTable::end() const {  // NOLINT for STL name compabi
   // The end iterator could either point to an unfilled slot in a block, or point to nothing if every block in the
   // table is full. In the case that it points to nothing, we will use the end-iterator of the blocks list and
   // 0 to denote that this is the case. This solution makes increment logic simple and natural.
-  if (empty_) return {this, end_.load(), 0};
-  auto last_block = --end_.load();
-  uint32_t insert_head = (*last_block)->GetInsertHead();
+  uint64_t current_offset = offset_.load();
+  if (current_offset == 0) return {this, 0, 0};
+  RawBlock* last_block = array_[current_offset - 1].load();
+  uint32_t insert_head = last_block->GetInsertHead();
   // Last block is full, return the default end iterator that doesn't point to anything
-  if (insert_head == accessor_.GetBlockLayout().NumSlots()) return {this, ++last_block, 0};
+  if (insert_head == accessor_.GetBlockLayout().NumSlots()) return {this, current_offset, 0};
   // Otherwise, insert head points to the slot that will be inserted next, which would be exactly what we want.
-  return {this, last_block, insert_head};
+  return {this, current_offset - 1, insert_head};
 }
 
 bool DataTable::Update(const common::ManagedPointer<transaction::TransactionContext> txn, const TupleSlot slot,
@@ -132,28 +134,6 @@ bool DataTable::Update(const common::ManagedPointer<transaction::TransactionCont
   return true;
 }
 
-void DataTable::CheckMoveHead(std::list<RawBlock *>::iterator block) {
-  // Assume block is full
-  common::SpinLatch::ScopedSpinLatch guard_head(&header_latch_);
-  if (block == insertion_head_) {
-    // If the header block is full, move the header to point to the next block
-    insertion_head_++;
-  }
-
-  // If there are no more free blocks, create a new empty block and  point the insertion_head to it
-  if (insertion_head_ == blocks_.end()) {
-    RawBlock *new_block = NewBlock();
-    // take latch
-    common::SharedLatch::ScopedExclusiveLatch guard_block(&blocks_latch_);
-    // insert block
-    blocks_.push_back(new_block);
-    end_ = blocks_.end();
-    empty_ = false;
-    // set insertion header to --end()
-    insertion_head_ = --blocks_.end();
-  }
-}
-
 TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::TransactionContext> txn,
                             const ProjectedRow &redo) {
   TERRIER_ASSERT(redo.NumColumns() == accessor_.GetBlockLayout().NumColumns() - NUM_RESERVED_COLUMNS,
@@ -169,43 +149,86 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
   // If the first bit is 1, it indicates one txn is writing to the block.
 
   TupleSlot result;
-  auto block = insertion_head_;
+  uint64_t current_insert_idx = insert_index_.load();
+  RawBlock *block;
+  printf("inserting\n");
   while (true) {
     // No free block left
-    if (block == blocks_.end()) {
-      RawBlock *new_block = NewBlock();
+    if (current_insert_idx >= offset_.load()) {
+      printf("extending %llu\n", offset_.load());
+
+      block = NewBlock();
       TERRIER_ASSERT(accessor_.SetBlockBusyStatus(new_block), "Status of new block should not be busy");
       // No need to flip the busy status bit
-      accessor_.Allocate(new_block, &result);
+      accessor_.Allocate(block, &result);
       // take latch
-      common::SharedLatch::ScopedExclusiveLatch guard(&blocks_latch_);
+      uint64_t insert_index;
+      do {
+        insert_index = offset_.load();
+      } while (!offset_.compare_exchange_strong(insert_index , insert_index + 1));
+
+      array_ref_counter_++;
+      while(insert_index >= size_) {
+        if (resizing_) {
+          std::unique_lock<std::mutex> l(resizing_mux_);
+          done_resizing_.wait(l);
+          continue;
+        }
+
+        // because fuck you c++
+        bool f = false;
+        bool t = true;
+        if (!resizing_.compare_exchange_weak(f, t)) {
+          continue;
+        }
+        printf("resizing to %llu\n", size_.load());
+
+        std::atomic<RawBlock *>* new_array = new std::atomic<RawBlock *>[size_ * ARRAY_RESIZE_FACTOR];
+
+        while(array_ref_counter_.load() != 1);
+
+        memcpy(new_array, array_.load(), size_.load());
+        std::atomic<std::atomic<RawBlock *> *> old_array = array_.load();
+        array_ = new_array;
+        size_ = ARRAY_RESIZE_FACTOR * size_.load();
+        delete old_array;
+
+        resizing_ = false;
+        done_resizing_.notify_all();
+        break;
+      }
+      array_ref_counter_--;
+
+
       // insert block
-      blocks_.push_back(new_block);
-      end_ = blocks_.end();
-      empty_ = false;
-      block = --blocks_.end();
+      array_[insert_index] = block;
       break;
     }
+    block = array_[current_insert_idx].load();
 
-    if (accessor_.SetBlockBusyStatus(*block)) {
+    if (accessor_.SetBlockBusyStatus(block)) {
       // No one is inserting into this block
-      if (accessor_.Allocate(*block, &result)) {
+      if (accessor_.Allocate(block, &result)) {
         // The block is not full, succeed
         break;
       }
       // Fail to insert into the block, flip back the status bit
-      accessor_.ClearBlockBusyStatus(*block);
+      accessor_.ClearBlockBusyStatus(block);
       // if the full block is the insertion_header, move the insertion_header
       // Next insert txn will search from the new insertion_header
-      CheckMoveHead(block);
+      if (current_insert_idx == insert_index_.load()) {
+        // if we fail, that's ok because that means that someone else incremented insert_index_
+        // so we retry on the next index
+        insert_index_.compare_exchange_strong(current_insert_idx, current_insert_idx + 1);
+      }
     }
     // The block is full or the block is being inserted by other txn, try next block
-    ++block;
+    ++current_insert_idx;
   }
 
   // Do not need to wait unit finish inserting,
   // can flip back the status bit once the thread gets the allocated tuple slot
-  accessor_.ClearBlockBusyStatus(*block);
+  accessor_.ClearBlockBusyStatus(block);
   InsertInto(txn, redo, result);
 
   data_table_counter_.IncrementNumInsert(1);
