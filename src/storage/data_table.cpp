@@ -21,10 +21,8 @@ DataTable::DataTable(BlockStore *const store, const BlockLayout &layout, const l
   size_ = ARRAY_START_SIZE;
   array_ = new std::atomic<RawBlock *>[size_];
   if (block_store_ != nullptr) {
-    offset_ = size_ / 2;
-    for (uint64_t i = 0; i < offset_; ++i) {
-      array_[i] = NewBlock();
-    }
+    offset_ = 1;
+    array_[0] = NewBlock();
   }
 }
 
@@ -65,31 +63,45 @@ void DataTable::Scan(const common::ManagedPointer<transaction::TransactionContex
 
 DataTable::SlotIterator &DataTable::SlotIterator::operator++() {
   // Jump to the next block if already the last slot in the block.
+  TupleSlot old = current_slot_;
+
+  num_iters_++;
   if (current_slot_.GetOffset() == table_->accessor_.GetBlockLayout().NumSlots() - 1) {
     ++offset_;
     block_ = offset_ >= table_->offset_.load() ? nullptr : table_->array_[offset_].load();
     // Cannot dereference if the next block is end(), so just use nullptr to denote
     current_slot_ = {block_, 0};
+//    printf("moving block\n");
   } else {
     current_slot_ = {block_, current_slot_.GetOffset() + 1};
   }
+
+  if (current_slot_ == old) {
+    printf("the end of the world\n");
+  }
+//  printf("slot offset %u\n", current_slot_.GetOffset());
   return *this;
+}
+
+DataTable::SlotIterator DataTable::begin() const {
+  return {this, 0, 0};
 }
 
 DataTable::SlotIterator DataTable::end() const {  // NOLINT for STL name compability
   // TODO(Tianyu): Need to look in detail at how this interacts with compaction when that gets in.
 
+  return END;
   // The end iterator could either point to an unfilled slot in a block, or point to nothing if every block in the
   // table is full. In the case that it points to nothing, we will use the end-iterator of the blocks list and
   // 0 to denote that this is the case. This solution makes increment logic simple and natural.
-  uint64_t current_offset = offset_.load();
-  if (current_offset == 0) return {this, 0, 0};
-  RawBlock* last_block = array_[current_offset - 1].load();
-  uint32_t insert_head = last_block->GetInsertHead();
-  // Last block is full, return the default end iterator that doesn't point to anything
-  if (insert_head == accessor_.GetBlockLayout().NumSlots()) return {this, current_offset, 0};
-  // Otherwise, insert head points to the slot that will be inserted next, which would be exactly what we want.
-  return {this, current_offset - 1, insert_head};
+//  uint64_t current_offset = offset_.load();
+//  if (current_offset == 0) return {this, 0, 0};
+//  RawBlock* last_block = array_[current_offset - 1].load();
+//  uint32_t insert_head = last_block->GetInsertHead();
+//  // Last block is full, return the default end iterator that doesn't point to anything
+//  if (insert_head == accessor_.GetBlockLayout().NumSlots()) return {this, current_offset, 0};
+//  // Otherwise, insert head points to the slot that will be inserted next, which would be exactly what we want.
+//  return {this, current_offset - 1, insert_head};
 }
 
 bool DataTable::Update(const common::ManagedPointer<transaction::TransactionContext> txn, const TupleSlot slot,
@@ -151,22 +163,24 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
   TupleSlot result;
   uint64_t current_insert_idx = insert_index_.load();
   RawBlock *block;
-  printf("inserting\n");
   while (true) {
     // No free block left
     if (current_insert_idx >= offset_.load()) {
       printf("extending %llu\n", offset_.load());
 
       block = NewBlock();
+      printf("new block made\n");
       TERRIER_ASSERT(accessor_.SetBlockBusyStatus(new_block), "Status of new block should not be busy");
       // No need to flip the busy status bit
       accessor_.Allocate(block, &result);
+      printf("here2\n");
       // take latch
       uint64_t insert_index;
       do {
         insert_index = offset_.load();
       } while (!offset_.compare_exchange_strong(insert_index , insert_index + 1));
 
+      printf("here\n");
       array_ref_counter_++;
       while(insert_index >= size_) {
         if (resizing_) {
@@ -178,12 +192,12 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
         // because fuck you c++
         bool f = false;
         bool t = true;
-        if (!resizing_.compare_exchange_weak(f, t)) {
+        if (!resizing_.compare_exchange_strong(f, t)) {
           continue;
         }
-        printf("resizing to %llu\n", size_.load());
+        printf("resizing from %llu to %llu\n", size_.load(), ARRAY_RESIZE_FACTOR * size_.load());
 
-        std::atomic<RawBlock *>* new_array = new std::atomic<RawBlock *>[size_ * ARRAY_RESIZE_FACTOR];
+        std::atomic<RawBlock *>* new_array = new std::atomic<RawBlock *>[size_.load() * ARRAY_RESIZE_FACTOR];
 
         while(array_ref_counter_.load() != 1);
 
@@ -212,6 +226,7 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
         // The block is not full, succeed
         break;
       }
+      printf("here1\n");
       // Fail to insert into the block, flip back the status bit
       accessor_.ClearBlockBusyStatus(block);
       // if the full block is the insertion_header, move the insertion_header
