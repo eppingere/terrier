@@ -51,12 +51,23 @@ class DataTable {
     /**
      * @return reference to the underlying tuple slot
      */
-    const TupleSlot &operator*() const { return current_slot_; }
+    TupleSlot &operator*() {
+      common::SharedLatch::ScopedSharedLatch l(&table_->blocks_latch_);
+      auto b = table_->blocks_.begin();
+      for (uint64_t i = 0; i < i_ / max_slots_; i++) {
+        ++b;
+      }
+      current_slot_ = {*b, static_cast<uint32_t>(i_ % static_cast<uint64_t>(max_slots_))};
+      return current_slot_;
+    }
 
     /**
      * @return pointer to the underlying tuple slot
      */
-    const TupleSlot *operator->() const { return &current_slot_; }
+    TupleSlot *operator->() {
+      operator*();
+      return &current_slot_;
+    }
 
     /**
      * pre-fix increment.
@@ -81,14 +92,13 @@ class DataTable {
      */
     bool operator==(const SlotIterator &other) const {
       // TODO(Tianyu): I believe this is enough?
-      if (isEnd_ && other.isEnd_) {
-        return true;
-      } else if (other.isEnd_) {
-        return num_iters_ >= max_iters_;
-      } else if (isEnd_) {
-        return other.num_iters_ >= other.max_iters_;
+      if (other.isEnd_) {
+        return i_ >= max_iters_;
       }
-      return current_slot_ == other.current_slot_;
+      if (isEnd_) {
+        return other.i_ >= other.max_iters_;
+      }
+      return table_ == other.table_ && i_ == other.i_;
     }
 
     /**
@@ -100,34 +110,29 @@ class DataTable {
 
    private:
     friend class DataTable;
-
-    SlotIterator(const DataTable *table, uint64_t offset, uint32_t offset_in_block)
-      : table_(table), block_(nullptr), offset_(0), num_iters_(0), max_iters_(0),
-        max_slot_index_(0), current_slot_({nullptr, 0}), isEnd_(false) {
-      uint64_t current_offset = table->offset_.load();
-      if (offset_ < current_offset) {
-          max_slot_index_ = table_->accessor_.GetBlockLayout().NumSlots();
-          block_ = table_->array_[offset_].load();
-          uint32_t last_slot = table_->array_[current_offset - 1].load()->GetInsertHead();
-          max_iters_ = (current_offset - 1) * max_slot_index_ + static_cast<uint64_t>(last_slot);
+    /**
+     * @warning MUST BE CALLED ONLY WHEN CALLER HOLDS LOCK TO THE LIST OF RAW BLOCKS IN THE DATA TABLE
+     */
+    SlotIterator(const DataTable *table, bool isEnd)
+        : table_(table), max_iters_(0), i_(0), max_slots_(table_->accessor_.GetBlockLayout().NumSlots()),
+          isEnd_(isEnd) {
+      if (isEnd) {
+        return;
       }
-      current_slot_ = {block_, offset_in_block};
-    }
-
-    SlotIterator()
-        : table_(nullptr), block_(nullptr), offset_(0), num_iters_(0), max_iters_(0), max_slot_index_(0),
-        current_slot_({nullptr, 0}), isEnd_(true) {
-        printf("in end\n");
+      common::SharedLatch::ScopedSharedLatch l(&table_->blocks_latch_);
+      uint64_t current_size = table_->blocks_.size();
+      auto last_block = --table_->blocks_.end();
+      max_iters_ = (current_size - 1) * max_slots_ + (*last_block)->GetInsertHead();
     }
 
     // TODO(Tianyu): Can potentially collapse this information into the RawBlock so we don't have to hold a pointer to
     // the table anymore. Right now we need the table to know how many slots there are in the block
     const DataTable *table_;
-    RawBlock *block_;
-    uint64_t offset_, num_iters_, max_iters_;
-    uint32_t max_slot_index_;
-    TupleSlot current_slot_;
+    uint64_t max_iters_;
+    uint64_t i_;
+    uint32_t max_slots_;
     bool isEnd_;
+    TupleSlot current_slot_;
   };
   /**
    * Constructs a new DataTable with the given layout, using the given BlockStore as the source
@@ -179,7 +184,9 @@ class DataTable {
   /**
    * @return the first tuple slot contained in the data table
    */
-  SlotIterator begin() const;
+  SlotIterator begin() const {  // NOLINT for STL name compability
+    return {this, false};
+  }
 
   /**
    * Returns one past the last tuple slot contained in the data table. Note that this is not an accurate number when
@@ -254,11 +261,9 @@ class DataTable {
   BlockStore *const block_store_;
   const layout_version_t layout_version_;
   const TupleAccessStrategy accessor_;
-  const uint64_t ARRAY_START_SIZE = 8;
-  const uint64_t ARRAY_RESIZE_FACTOR = 2;
-  const SlotIterator END = SlotIterator();
+  const SlotIterator END = {this, true};
 
-    // TODO(Tianyu): For now, on insertion, we simply sequentially go through a block and allocate a
+  // TODO(Tianyu): For now, on insertion, we simply sequentially go through a block and allocate a
   // new one when the current one is full. Needless to say, we will need to revisit this when extending GC to handle
   // deleted tuples and recycle slots
   // TODO(Tianyu): Now that we are switching to a linked list, there probably isn't a reason for it
@@ -266,14 +271,15 @@ class DataTable {
   // negligible difference in insert performance (within margin of error) when benchmarked.
   // We also might need our own implementation because we need to handle GC of an unlinked block, as a sequential scan
   // might be on it
-  std::atomic_uint64_t offset_, insert_index_, array_ref_counter_, size_;
-  std::atomic<std::atomic<RawBlock *> *> array_;
-  common::SharedLatch resize_latch_;
-
-  std::atomic_bool resizing_;
-  std::mutex resizing_mux_;
-  std::condition_variable done_resizing_;
+  std::list<RawBlock *> blocks_;
+  // latch used to protect block list
+  mutable common::SharedLatch blocks_latch_;
+  // latch used to protect insertion_head_
+  mutable common::SpinLatch header_latch_;
+  std::list<RawBlock *>::iterator insertion_head_;
   // Check if we need to advance the insertion_head_
+  // This function uses header_latch_ to ensure correctness
+  void CheckMoveHead(std::list<RawBlock *>::iterator block);
   mutable DataTableCounter data_table_counter_;
 
   // A templatized version for select, so that we can use the same code for both row and column access.
