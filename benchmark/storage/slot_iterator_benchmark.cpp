@@ -80,7 +80,6 @@ class SlotIteratorBenchmark : public benchmark::Fixture {
 // Iterate the num_reads_ of tuples in the sequential  order from a DataTable concurrently
 // NOLINTNEXTLINE
 BENCHMARK_DEFINE_F(SlotIteratorBenchmark, ConcurrentSlotIterators)(benchmark::State &state) {
-  printf("starting test\n");
   storage::DataTable read_table(&block_store_, layout_, storage::layout_version_t(0));
 
   // populate read_table_ by inserting tuples
@@ -89,13 +88,8 @@ BENCHMARK_DEFINE_F(SlotIteratorBenchmark, ConcurrentSlotIterators)(benchmark::St
                                       common::ManagedPointer(&buffer_pool_), DISABLED);
   std::vector<storage::TupleSlot> read_order;
   for (uint32_t i = 0; i < num_reads_; ++i) {
-//    if (i % 1000 == 0) {
-      printf("inserting %u\n", i);
-//    }
     read_table.Insert(common::ManagedPointer(&txn), *redo_);
   }
-
-  printf("done inserting\n");
 
   auto workload = [&]() {
     auto it = read_table.begin();
@@ -103,9 +97,6 @@ BENCHMARK_DEFINE_F(SlotIteratorBenchmark, ConcurrentSlotIterators)(benchmark::St
     while (it != read_table.end()) {
       num_reads++;
       it++;
-      if (num_reads % 10000000 == 0) {
-        printf("%d\n", num_reads);
-      }
     }
     EXPECT_EQ(num_reads, num_reads_);
   };
@@ -115,7 +106,6 @@ BENCHMARK_DEFINE_F(SlotIteratorBenchmark, ConcurrentSlotIterators)(benchmark::St
 
   // NOLINTNEXTLINE
   for (auto _ : state) {
-    printf("starting test round\n");
     uint64_t elapsed_ms;
     {
       common::ScopedTimer<std::chrono::milliseconds> timer(&elapsed_ms);
@@ -124,7 +114,6 @@ BENCHMARK_DEFINE_F(SlotIteratorBenchmark, ConcurrentSlotIterators)(benchmark::St
       }
       thread_pool.WaitUntilAllFinished();
     }
-    printf("done with test\n");
     state.SetIterationTime(static_cast<double>(elapsed_ms) / 1000.0);
   }
   state.SetItemsProcessed(state.iterations() * num_reads_ * BenchmarkConfig::num_threads);
