@@ -40,7 +40,7 @@ DataTable::~DataTable() {
       accessor_.GetArrowBlockMetadata(array_[idx]).GetColumnInfo(accessor_.GetBlockLayout(), i).Deallocate();
     block_store_->Release(array_[idx]);
   }
-  delete array_;
+  delete[] array_;
 }
 
 bool DataTable::Select(const common::ManagedPointer<transaction::TransactionContext> txn, TupleSlot slot,
@@ -173,7 +173,7 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
         std::atomic<std::atomic<RawBlock *> *> old_array = array_.load();
         array_ = new_array;
         size_ = array_resize_factor_ * size_.load();
-        delete old_array;
+        delete[] old_array;
 
         resizing_ = false;
         done_resizing_.notify_all();
