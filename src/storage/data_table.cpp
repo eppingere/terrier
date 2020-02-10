@@ -10,14 +10,21 @@
 
 namespace terrier::storage {
 DataTable::DataTable(BlockStore *const store, const BlockLayout &layout, const layout_version_t layout_version)
-    : block_store_(store), layout_version_(layout_version), accessor_(layout), offset_(0), insert_index_(0),
-      array_ref_counter_(0), size_(0), write_num_(0), resizing_(false) {
+    : block_store_(store),
+      layout_version_(layout_version),
+      accessor_(layout),
+      offset_(0),
+      insert_index_(0),
+      array_ref_counter_(0),
+      size_(0),
+      write_num_(0),
+      resizing_(false) {
   TERRIER_ASSERT(layout.AttrSize(VERSION_POINTER_COLUMN_ID) == 8,
                  "First column must have size 8 for the version chain.");
   TERRIER_ASSERT(layout.NumColumns() > NUM_RESERVED_COLUMNS,
                  "First column is reserved for version info, second column is reserved for logical delete.");
 
-  size_ = ARRAY_START_SIZE;
+  size_ = array_start_size_;
   array_ = new std::atomic<RawBlock *>[size_];
   if (block_store_ != nullptr) {
     offset_ = 1;
@@ -67,7 +74,7 @@ DataTable::SlotIterator &DataTable::SlotIterator::operator++() {
 }
 
 DataTable::SlotIterator DataTable::end() const {  // NOLINT for STL name compability
-  return END;
+  return end_;
 }
 
 bool DataTable::Update(const common::ManagedPointer<transaction::TransactionContext> txn, const TupleSlot slot,
@@ -132,19 +139,18 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
   while (true) {
     // No free block left
     if (current_insert_idx >= offset_.load()) {
-
       block = NewBlock();
-      TERRIER_ASSERT(accessor_.SetBlockBusyStatus(new_block), "Status of new block should not be busy");
+      TERRIER_ASSERT(accessor_.SetBlockBusyStatus(block), "Status of new block should not be busy");
       // No need to flip the busy status bit
       accessor_.Allocate(block, &result);
       // take latch
       uint64_t insert_index;
       do {
         insert_index = offset_.load();
-      } while (!offset_.compare_exchange_strong(insert_index , insert_index + 1));
+      } while (!offset_.compare_exchange_strong(insert_index, insert_index + 1));
 
       array_ref_counter_++;
-      while(insert_index >= size_) {
+      while (insert_index >= size_) {
         if (resizing_) {
           std::unique_lock<std::mutex> l(resizing_mux_);
           done_resizing_.wait(l);
@@ -158,14 +164,15 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
           continue;
         }
 
-        std::atomic<RawBlock *>* new_array = new std::atomic<RawBlock *>[size_.load() * ARRAY_RESIZE_FACTOR];
+        auto new_array = new std::atomic<RawBlock *>[size_.load() * array_resize_factor_];
 
-        while(array_ref_counter_.load() != 1);
+        while (array_ref_counter_.load() != 1) {
+        }
 
         memcpy(new_array, array_.load(), size_.load());
         std::atomic<std::atomic<RawBlock *> *> old_array = array_.load();
         array_ = new_array;
-        size_ = ARRAY_RESIZE_FACTOR * size_.load();
+        size_ = array_resize_factor_ * size_.load();
         delete old_array;
 
         resizing_ = false;
@@ -174,15 +181,17 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
       }
       array_ref_counter_--;
 
-
       // insert block
       array_[insert_index] = block;
-      while (write_num_ < insert_index) ;
+      while (write_num_ < insert_index) {
+      }
       write_num_++;
       break;
     }
 
-    while (write_num_ < current_insert_idx) ;
+    while (write_num_ < current_insert_idx) {
+    }
+
     block = array_[current_insert_idx].load();
 
     if (accessor_.SetBlockBusyStatus(block)) {
