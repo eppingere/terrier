@@ -53,8 +53,9 @@ class DataTable {
      */
     TupleSlot &operator*() {
       uint64_t block_num = i_ / max_slots_;
-      while (table_->write_num_ + 1 < block_num) ;
-      RawBlock* b = table_->array_[block_num].load();
+      while (table_->write_num_ + 1 < block_num) {
+      }
+      RawBlock *b = table_->array_[block_num].load();
       current_slot_ = {b, static_cast<uint32_t>(i_ % static_cast<uint64_t>(max_slots_))};
       return current_slot_;
     }
@@ -90,10 +91,10 @@ class DataTable {
      */
     bool operator==(const SlotIterator &other) const {
       // TODO(Tianyu): I believe this is enough?
-      if (other.isEnd_) {
+      if (other.is_end_) {
         return i_ >= max_iters_;
       }
-      if (isEnd_) {
+      if (is_end_) {
         return other.i_ >= other.max_iters_;
       }
       return table_ == other.table_ && i_ == other.i_;
@@ -111,14 +112,17 @@ class DataTable {
     /**
      * @warning MUST BE CALLED ONLY WHEN CALLER HOLDS LOCK TO THE LIST OF RAW BLOCKS IN THE DATA TABLE
      */
-    SlotIterator(const DataTable *table, bool isEnd)
-        : table_(table), max_iters_(0), i_(0), max_slots_(table_->accessor_.GetBlockLayout().NumSlots()),
-          isEnd_(isEnd) {
-      if (isEnd) {
+    SlotIterator(const DataTable *table, bool is_end)
+        : table_(table),
+          max_iters_(0),
+          i_(0),
+          max_slots_(table_->accessor_.GetBlockLayout().NumSlots()),
+          is_end_(is_end) {
+      if (is_end_) {
         return;
       }
       uint64_t current_size = table_->write_num_.load();
-      RawBlock* last_block = table_->array_[current_size - 1].load();
+      RawBlock *last_block = table_->array_[current_size - 1].load();
       max_iters_ = (current_size - 1) * max_slots_ + (*last_block).GetInsertHead();
     }
 
@@ -128,7 +132,7 @@ class DataTable {
     uint64_t max_iters_;
     uint64_t i_;
     uint32_t max_slots_;
-    bool isEnd_;
+    bool is_end_;
     TupleSlot current_slot_;
   };
   /**
@@ -258,9 +262,9 @@ class DataTable {
   BlockStore *const block_store_;
   const layout_version_t layout_version_;
   const TupleAccessStrategy accessor_;
-  const uint64_t ARRAY_START_SIZE = 256;
-  const uint64_t ARRAY_RESIZE_FACTOR = 2;
-  const SlotIterator END = {this, true};
+  const uint64_t array_start_size_ = 256;
+  const uint64_t array_resize_factor_ = 2;
+  const SlotIterator end_ = {this, true};
 
   // TODO(Tianyu): For now, on insertion, we simply sequentially go through a block and allocate a
   // new one when the current one is full. Needless to say, we will need to revisit this when extending GC to handle
