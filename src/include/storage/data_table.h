@@ -52,12 +52,10 @@ class DataTable {
      * @return reference to the underlying tuple slot
      */
     TupleSlot &operator*() {
-      common::SharedLatch::ScopedSharedLatch l(&table_->blocks_latch_);
-      auto b = table_->blocks_.begin();
-      for (uint64_t i = 0; i < i_ / max_slots_; i++) {
-        ++b;
-      }
-      current_slot_ = {*b, static_cast<uint32_t>(i_ % static_cast<uint64_t>(max_slots_))};
+      uint64_t block_num = i_ / max_slots_;
+      while (table_->write_num_ + 1 < block_num) ;
+      RawBlock* b = table_->array_[block_num].load();
+      current_slot_ = {b, static_cast<uint32_t>(i_ % static_cast<uint64_t>(max_slots_))};
       return current_slot_;
     }
 
@@ -119,10 +117,9 @@ class DataTable {
       if (isEnd) {
         return;
       }
-      common::SharedLatch::ScopedSharedLatch l(&table_->blocks_latch_);
-      uint64_t current_size = table_->blocks_.size();
-      auto last_block = --table_->blocks_.end();
-      max_iters_ = (current_size - 1) * max_slots_ + (*last_block)->GetInsertHead();
+      uint64_t current_size = table_->write_num_.load();
+      RawBlock* last_block = table_->array_[current_size - 1].load();
+      max_iters_ = (current_size - 1) * max_slots_ + (*last_block).GetInsertHead();
     }
 
     // TODO(Tianyu): Can potentially collapse this information into the RawBlock so we don't have to hold a pointer to
@@ -261,6 +258,8 @@ class DataTable {
   BlockStore *const block_store_;
   const layout_version_t layout_version_;
   const TupleAccessStrategy accessor_;
+  const uint64_t ARRAY_START_SIZE = 256;
+  const uint64_t ARRAY_RESIZE_FACTOR = 2;
   const SlotIterator END = {this, true};
 
   // TODO(Tianyu): For now, on insertion, we simply sequentially go through a block and allocate a
@@ -271,15 +270,14 @@ class DataTable {
   // negligible difference in insert performance (within margin of error) when benchmarked.
   // We also might need our own implementation because we need to handle GC of an unlinked block, as a sequential scan
   // might be on it
-  std::list<RawBlock *> blocks_;
-  // latch used to protect block list
-  mutable common::SharedLatch blocks_latch_;
-  // latch used to protect insertion_head_
-  mutable common::SpinLatch header_latch_;
-  std::list<RawBlock *>::iterator insertion_head_;
+  std::atomic_uint64_t offset_, insert_index_, array_ref_counter_, size_, write_num_;
+  std::atomic<std::atomic<RawBlock *> *> array_;
+
+  std::atomic_bool resizing_;
+  std::mutex resizing_mux_;
+  std::condition_variable done_resizing_;
   // Check if we need to advance the insertion_head_
   // This function uses header_latch_ to ensure correctness
-  void CheckMoveHead(std::list<RawBlock *>::iterator block);
   mutable DataTableCounter data_table_counter_;
 
   // A templatized version for select, so that we can use the same code for both row and column access.
