@@ -186,10 +186,11 @@ TupleSlot DataTable::Insert(const common::ManagedPointer<transaction::Transactio
       while (write_num_ < insert_index) {
       }
       write_num_++;
+      current_insert_idx = insert_index;
       break;
     }
 
-    while (write_num_ < current_insert_idx) {
+    while (write_num_ - 1 < current_insert_idx) {
     }
 
     block = array_[current_insert_idx].load();
