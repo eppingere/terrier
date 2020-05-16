@@ -175,6 +175,8 @@ public class FunctionsTest extends TestUtility {
         checkStringFunc("substr", "str_a_val, 10, 2", false, null);
         checkStringFunc("substr", "str_a_val, 1, -2", false, null);
         checkStringFunc("substr", "str_a_val, -1, -2", false, null);
+        checkStringFunc("substr", "str_a_val, -1, -2", true, null);
+
     }
 
 }
