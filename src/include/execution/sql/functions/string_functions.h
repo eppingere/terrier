@@ -97,6 +97,8 @@ class EXPORT StringFunctions {
 
   /**
    * Return the substring starting at pos of length len
+   * Note: if pos.val_ is negative it will be rounded up to 0 and a length value that goes beyond the string will stop
+   * at the last character of the string
    */
   static void Substring(exec::ExecutionContext *ctx, StringVal *result, const StringVal &str, const Integer &pos,
                         const Integer &len);
