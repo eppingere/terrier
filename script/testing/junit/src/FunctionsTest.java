@@ -129,23 +129,6 @@ public class FunctionsTest extends TestUtility {
         }
         assertNoMoreRows(rs);
     }
-
-    private void checkStringFunc1(String func_name, String col_name, boolean is_null, String expected) throws SQLException {
-        String sql = String.format("SELECT %s(%s) AS result FROM data WHERE is_null = %s",
-                                   func_name, col_name, (is_null ? 1 : 0));
-
-        System.out.println(sql);
-        Statement stmt = conn.createStatement();
-        ResultSet rs = stmt.executeQuery(sql);
-        boolean exists = rs.next();
-        assert(exists);
-        if (is_null) {
-            checkStringRow(rs, new String[]{"result"}, new String[]{null});
-        } else {
-            checkStringRow(rs, new String[]{"result"}, new String[]{expected});
-        }
-        assertNoMoreRows(rs);
-    }
      
     /**
      * Tests usage of trig udf functions
@@ -181,22 +164,17 @@ public class FunctionsTest extends TestUtility {
      */
     @Test
     public void testSubstr() throws SQLException {
-        checkStringFunc1("substr", "str_a_val, 1, 1", false, "A");
-        checkStringFunc1("substr", "str_a_val, 1, 2", false, "Ab");
-        checkStringFunc1("substr", "str_a_val, 2, 3", false, "bCd");
-        checkStringFunc1("substr", "str_a_val, 2, 10", false, "bCdEf");
+        checkStringFunc("substr", "str_a_val, 1, 1", false, "A");
+        checkStringFunc("substr", "str_a_val, 1, 2", false, "Ab");
+        checkStringFunc("substr", "str_a_val, 2, 3", false, "bCd");
+        checkStringFunc("substr", "str_a_val, 2, 10", false, "bCdEf");
 
-        checkStringFunc1("substr", "str_a_val, -1, 2", false, "");
-        checkStringFunc1("substr", "str_a_val, -1, -2", false, "");
-        checkStringFunc1("substr", "str_a_val, 1, 0", false, "");
+        checkStringFunc("substr", "str_a_val, -1, 2", false, "");
+        checkStringFunc("substr", "str_a_val, 1, 0", false, "");
 
-
-        checkStringFunc1("substr", "str_a_val, 10, 2", false, null);
-        checkStringFunc1("substr", "str_a_val, 1, -2", false, null);
-
-
-
-        checkStringFunc1("substr", "str_a_val", true, null);
+        checkStringFunc("substr", "str_a_val, 10, 2", false, null);
+        checkStringFunc("substr", "str_a_val, 1, -2", false, null);
+        checkStringFunc("substr", "str_a_val, -1, -2", false, null);
     }
 
 }

@@ -1830,8 +1830,9 @@ void DatabaseCatalog::BootstrapProcContexts(const common::ManagedPointer<transac
   SetProcCtxPtr(txn, postgres::LOWER_PRO_OID, func_context);
   txn->RegisterAbortAction([=]() { delete func_context; });
 
-  func_context = new execution::functions::FunctionContext("substr", type::TypeId::VARCHAR, {type::TypeId::VARCHAR, type::TypeId::INTEGER, type::TypeId::INTEGER},
-                                                           execution::ast::Builtin::Substring, true);
+  func_context = new execution::functions::FunctionContext(
+      "substr", type::TypeId::VARCHAR, {type::TypeId::VARCHAR, type::TypeId::INTEGER, type::TypeId::INTEGER},
+      execution::ast::Builtin::Substring, true);
   SetProcCtxPtr(txn, postgres::SUBSTR_PRO_OID, func_context);
   txn->RegisterAbortAction([=]() { delete func_context; });
 }
