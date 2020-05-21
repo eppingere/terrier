@@ -2070,6 +2070,11 @@ void BytecodeGenerator::VisitBuiltinStringCall(ast::CallExpr *call, ast::Builtin
       Emitter()->Emit(Bytecode::Position, exec_ctx, ret, input_string, sub_string);
       break;
     }
+    case ast::Builtin::StartsWith: {
+      LocalVar start_str = VisitExpressionForRValue(call->Arguments()[2]);
+      Emitter()->Emit(Bytecode::StartsWith, exec_ctx, ret, input_string, start_str);
+      break;
+    }
     default:
       UNREACHABLE("Unimplemented string function!");
   }
@@ -2365,7 +2370,8 @@ void BytecodeGenerator::VisitBuiltinCallExpr(ast::CallExpr *call) {
       break;
     }
 
-    case ast::Builtin::Lower: {
+    case ast::Builtin::Lower:
+    case ast::Builtin::StartsWith: {
       VisitBuiltinStringCall(call, builtin);
       break;
     }

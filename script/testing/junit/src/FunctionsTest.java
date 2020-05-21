@@ -146,14 +146,21 @@ public class FunctionsTest extends TestUtility {
         assertNoMoreRows(rs);
     }
 
+<<<<<<< HEAD
     private void checkStringPositionFunc(String func_name, String substring, String col_name, boolean is_null, Integer expected) throws SQLException {
         String sql = String.format("SELECT %s(\'%s\' IN %s) AS result FROM data WHERE is_null = %s", func_name, substring, col_name, (is_null ? 1 : 0));
+=======
+    private void checkStringToBoolFunc(String func_name, String col_name, boolean is_null, Boolean expected) throws SQLException {
+        String sql = String.format("SELECT %s(%s) AS result FROM data WHERE is_null = %s",
+                                   func_name, col_name, (is_null ? 1 : 0));
+>>>>>>> added starts_with
 
         Statement stmt = conn.createStatement();
         ResultSet rs = stmt.executeQuery(sql);
         boolean exists = rs.next();
         assert(exists);
         if (is_null) {
+<<<<<<< HEAD
             checkIntRow(rs, new String[]{"result"}, new Integer[1]);
         } else {
             checkIntRow(rs, new String[]{"result"}, new Integer[]{expected});
@@ -161,6 +168,14 @@ public class FunctionsTest extends TestUtility {
         assertNoMoreRows(rs);
     }
      
+=======
+            checkBoolRow(rs, new String[]{"result"}, new Boolean[]{null});
+        } else {
+            checkBoolRow(rs, new String[]{"result"}, new Boolean[]{expected});
+        }
+        assertNoMoreRows(rs);
+    }
+>>>>>>> added starts_with
     /**
      * Tests usage of trig udf functions
      * #744 test
@@ -220,4 +235,16 @@ public class FunctionsTest extends TestUtility {
         checkStringPositionFunc("position", "aa", "str_a_val", false, 0);
         checkStringPositionFunc("position", "bC", "str_a_val", true, null);
     }
+
+    @Test
+    public void testStartsWith() throws SQLException {
+        checkStringToBoolFunc("starts_with", "str_a_val, 'A'", false, true);
+        checkStringToBoolFunc("starts_with", "str_a_val, 'f'", false, false);
+        checkStringToBoolFunc("starts_with", "str_a_val, 'AbCdEf'", false, true);
+        checkStringToBoolFunc("starts_with", "str_a_val, 'AbCdEfg'", false, false);
+        checkStringToBoolFunc("starts_with", "str_a_val, ''", false, true);
+
+        checkStringToBoolFunc("starts_with", "str_a_val, 'AbCdEf'", true, null);
+    }
+
 }
