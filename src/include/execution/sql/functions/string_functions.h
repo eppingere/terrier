@@ -59,6 +59,11 @@ class EXPORT StringFunctions {
   static void Ltrim(exec::ExecutionContext *ctx, StringVal *result, const StringVal &str);
 
   /**
+   * Get position of search_sub_str in search_str
+   */
+  static void Position(exec::ExecutionContext *ctx, Integer *pos, const StringVal &search_str, const StringVal &search_sub_str);
+
+  /**
    * Repeat a string n times
    */
   static void Repeat(exec::ExecutionContext *ctx, StringVal *result, const StringVal &str, const Integer &n);
@@ -107,6 +112,11 @@ class EXPORT StringFunctions {
   static void Substring(exec::ExecutionContext *ctx, StringVal *result, const StringVal &str, const Integer &pos) {
     Substring(ctx, result, str, pos, Integer(std::numeric_limits<int64_t>::max()));
   }
+
+  /**
+   * Check that start is the prefix of str
+   */
+  static void StartsWith(exec::ExecutionContext *ctx, BoolVal *result, const StringVal &str, const StringVal &start);
 
   /**
    * Perform a trim of the given characters on both sides

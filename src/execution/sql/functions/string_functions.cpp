@@ -1,6 +1,7 @@
 #include "execution/sql/functions/string_functions.h"
 
 #include <algorithm>
+#include <string>
 
 #include "execution/exec/execution_context.h"
 #include "execution/util/bit_util.h"
@@ -361,6 +362,39 @@ void StringFunctions::Right(UNUSED_ATTRIBUTE exec::ExecutionContext *ctx, String
   } else {
     *result = StringVal(str.Content() + len, str.len_ - len);
   }
+}
+
+void StringFunctions::Position(exec::ExecutionContext *ctx, Integer *pos, const StringVal &search_str,
+                               const StringVal &search_sub_str) {
+  if (search_str.is_null_ || search_sub_str.is_null_) {
+    *pos = Integer::Null();
+    return;
+  }
+
+  auto search_str_view = search_str.StringView();
+  auto search_sub_str_view = search_sub_str.StringView();
+
+  // Postgres performs a case insensitive search for Position()
+  auto it =
+      std::search(search_str_view.begin(), search_str_view.end(), search_sub_str_view.begin(),
+                  search_sub_str_view.end(), [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); });
+  auto found = (it - search_str_view.begin());
+
+  if (static_cast<size_t>(found) == search_str_view.length()) {
+    *pos = Integer(0);
+  } else {
+    *pos = Integer(found + 1);
+  }
+}
+
+void StringFunctions::StartsWith(UNUSED_ATTRIBUTE exec::ExecutionContext *ctx, BoolVal *result, const StringVal &str,
+                                 const StringVal &start) {
+  if (str.is_null_ || start.is_null_) {
+    *result = BoolVal::Null();
+    return;
+  }
+  *result =
+      BoolVal(start.len_ <= str.len_ && strncmp(str.Content(), start.Content(), static_cast<size_t>(start.len_)) == 0);
 }
 
 }  // namespace terrier::execution::sql
