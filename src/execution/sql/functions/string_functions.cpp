@@ -1,6 +1,7 @@
 #include "execution/sql/functions/string_functions.h"
 
 #include <algorithm>
+#include <string>
 
 #include "execution/exec/execution_context.h"
 #include "execution/util/bit_util.h"
@@ -361,6 +362,16 @@ void StringFunctions::Right(UNUSED_ATTRIBUTE exec::ExecutionContext *ctx, String
   } else {
     *result = StringVal(str.Content() + len, str.len_ - len);
   }
+}
+
+void StringFunctions::StartsWith(UNUSED_ATTRIBUTE exec::ExecutionContext *ctx, BoolVal *result, const StringVal &str,
+                                 const StringVal &start) {
+  if (str.is_null_ || start.is_null_) {
+    *result = BoolVal::Null();
+    return;
+  }
+  *result =
+      BoolVal(start.len_ <= str.len_ && strncmp(str.Content(), start.Content(), static_cast<size_t>(start.len_)) == 0);
 }
 
 }  // namespace terrier::execution::sql

@@ -109,6 +109,11 @@ class EXPORT StringFunctions {
   }
 
   /**
+   * Check that start is the prefix of str
+   */
+  static void StartsWith(exec::ExecutionContext *ctx, BoolVal *result, const StringVal &str, const StringVal &start);
+
+  /**
    * Perform a trim of the given characters on both sides
    */
   static void Trim(exec::ExecutionContext *ctx, StringVal *result, const StringVal &str, const StringVal &chars);

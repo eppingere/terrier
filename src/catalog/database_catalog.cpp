@@ -1783,7 +1783,10 @@ void DatabaseCatalog::BootstrapProcs(const common::ManagedPointer<transaction::T
   CreateProcedure(txn, postgres::LOWER_PRO_OID, "lower", postgres::INTERNAL_LANGUAGE_OID,
                   postgres::NAMESPACE_DEFAULT_NAMESPACE_OID, {"str"}, {str_type}, {str_type}, {}, str_type, "", true);
 
-  // TODO(tanujnay112): no op codes for lower and upper yet
+  auto bool_type = GetTypeOidForType(type::TypeId::BOOLEAN);
+  CreateProcedure(txn, postgres::STARTSWITH_PRO_OID, "starts_with", postgres::INTERNAL_LANGUAGE_OID,
+                  postgres::NAMESPACE_DEFAULT_NAMESPACE_OID, {"str", "start"}, {str_type, str_type},
+                  {str_type, str_type}, {}, bool_type, "", true);
 
   BootstrapProcContexts(txn);
 }
@@ -1825,6 +1828,12 @@ void DatabaseCatalog::BootstrapProcContexts(const common::ManagedPointer<transac
   func_context = new execution::functions::FunctionContext("lower", type::TypeId::VARCHAR, {type::TypeId::VARCHAR},
                                                            execution::ast::Builtin::Lower, true);
   SetProcCtxPtr(txn, postgres::LOWER_PRO_OID, func_context);
+  txn->RegisterAbortAction([=]() { delete func_context; });
+
+  func_context = new execution::functions::FunctionContext("starts_with", type::TypeId::BOOLEAN,
+                                                           {type::TypeId::VARCHAR, type::TypeId::VARCHAR},
+                                                           execution::ast::Builtin::StartsWith, true);
+  SetProcCtxPtr(txn, postgres::STARTSWITH_PRO_OID, func_context);
   txn->RegisterAbortAction([=]() { delete func_context; });
 }
 
