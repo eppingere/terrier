@@ -476,6 +476,7 @@ namespace terrier::execution::vm {
   F(Trim, OperandType::Local, OperandType::Local, OperandType::Local, OperandType::Local)                             \
   F(Upper, OperandType::Local, OperandType::Local, OperandType::Local)                                                \
   F(StartsWith, OperandType::Local, OperandType::Local, OperandType::Local, OperandType::Local)                       \
+  F(Position, OperandType::Local, OperandType::Local, OperandType::Local, OperandType::Local)                         \
                                                                                                                       \
   /* String functions */                                                                                              \
   F(GetParamBool, OperandType::Local, OperandType::Local, OperandType::Local)                                         \

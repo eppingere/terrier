@@ -1491,6 +1491,18 @@ void BytecodeGenerator::VisitBuiltinTrigCall(ast::CallExpr *call, ast::Builtin b
       Emitter()->Emit(Bytecode::Atan, dest, src);
       break;
     }
+    case ast::Builtin::Cosh: {
+      Emitter()->Emit(Bytecode::Cosh, dest, src);
+      break;
+    }
+    case ast::Builtin::Sinh: {
+      Emitter()->Emit(Bytecode::Sinh, dest, src);
+      break;
+    }
+    case ast::Builtin::Tanh: {
+      Emitter()->Emit(Bytecode::Tanh, dest, src);
+      break;
+    }
     case ast::Builtin::ATan2: {
       Emitter()->Emit(Bytecode::Atan2, dest, src);
       break;
@@ -1509,6 +1521,10 @@ void BytecodeGenerator::VisitBuiltinTrigCall(ast::CallExpr *call, ast::Builtin b
     }
     case ast::Builtin::Tan: {
       Emitter()->Emit(Bytecode::Tan, dest, src);
+      break;
+    }
+    case ast::Builtin::Log2: {
+      Emitter()->Emit(Bytecode::Log2, dest, src);
       break;
     }
     default: {
@@ -2054,6 +2070,11 @@ void BytecodeGenerator::VisitBuiltinStringCall(ast::CallExpr *call, ast::Builtin
       Emitter()->Emit(Bytecode::StartsWith, exec_ctx, ret, input_string, start_str);
       break;
     }
+    case ast::Builtin::Position: {
+      LocalVar sub_string = VisitExpressionForRValue(call->Arguments()[2]);
+      Emitter()->Emit(Bytecode::Position, exec_ctx, ret, input_string, sub_string);
+      break;
+    }
     default:
       UNREACHABLE("Unimplemented string function!");
   }
@@ -2236,10 +2257,17 @@ void BytecodeGenerator::VisitBuiltinCallExpr(ast::CallExpr *call) {
     case ast::Builtin::ASin:
     case ast::Builtin::ATan:
     case ast::Builtin::ATan2:
+    case ast::Builtin::Cosh:
+    case ast::Builtin::Sinh:
+    case ast::Builtin::Tanh:
     case ast::Builtin::Cos:
     case ast::Builtin::Cot:
     case ast::Builtin::Sin:
     case ast::Builtin::Tan: {
+      VisitBuiltinTrigCall(call, builtin);
+      break;
+    }
+    case ast::Builtin::Log2: {
       VisitBuiltinTrigCall(call, builtin);
       break;
     }
@@ -2344,6 +2372,10 @@ void BytecodeGenerator::VisitBuiltinCallExpr(ast::CallExpr *call) {
 
     case ast::Builtin::Lower:
     case ast::Builtin::StartsWith: {
+      VisitBuiltinStringCall(call, builtin);
+      break;
+    }
+    case ast::Builtin::Position: {
       VisitBuiltinStringCall(call, builtin);
       break;
     }
