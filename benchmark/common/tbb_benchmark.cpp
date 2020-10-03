@@ -11,7 +11,7 @@
 
 namespace terrier {
 
-class TBB_BENCHMARK : public benchmark::Fixture {};
+class TBBBENCHMARK : public benchmark::Fixture {};
 
 struct ParallelRunner
 {
@@ -29,7 +29,7 @@ struct ParallelRunner
   char* array_;
 };
 
-BENCHMARK_DEFINE_F(TBB_BENCHMARK, Basic)(benchmark::State &state){
+BENCHMARK_DEFINE_F(TBBBENCHMARK, Basic)(benchmark::State &state){
 
 
   std::vector<uint64_t> sizes;
@@ -67,6 +67,6 @@ BENCHMARK_DEFINE_F(TBB_BENCHMARK, Basic)(benchmark::State &state){
   }
 
 }
-BENCHMARK_REGISTER_F(TBB_BENCHMARK, Basic);
+BENCHMARK_REGISTER_F(TBBBENCHMARK, Basic);
 
 }
