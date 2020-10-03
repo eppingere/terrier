@@ -40,7 +40,7 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, Basic)(benchmark::State &state){
   for (uint64_t size = min_size; size <= max_size; size += size_change)
     sizes.push_back(size);
 
-  for (int num_threads = 1; num_threads <= std::thread::hardware_concurrency(); num_threads++) {
+  for (int num_threads = 1; num_threads <= static_cast<int>(std::thread::hardware_concurrency()); num_threads++) {
     for (auto &size : sizes) {
       try {
         char* array = new char [size];
