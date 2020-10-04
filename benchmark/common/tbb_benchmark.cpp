@@ -40,13 +40,19 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, Basic)(benchmark::State &state){
   for (uint64_t size = min_size; size <= max_size; size += size_change)
     sizes.push_back(size);
 
+  std::vector<char*> arrays;
+  for (auto &size : sizes) {
+    auto array = new char [size];
+    for (uint64_t i = 0; i < size; i++)
+      array[i] = i;
+    arrays.push_back(array);
+  }
+
   for (int num_threads = 1; num_threads <= static_cast<int>(std::thread::hardware_concurrency()); num_threads++) {
-    for (auto &size : sizes) {
+    for (uint64_t size_index = 0; size_index < arrays.size(); size_index++) {
       try {
-        char* array = new char [size];
-
-        for (uint64_t i = 0; i < size; i++) array[i] = i;
-
+        char *array = arrays[size_index];
+        uint64_t size = sizes[size_index];
         uint64_t time;
         {
           common::ScopedTimer<std::chrono::milliseconds> timer(&time);
@@ -60,11 +66,12 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, Basic)(benchmark::State &state){
 
         std::cout << num_threads << ", " << size << ", " << time << std::endl;
 
-        delete[] array;
       } catch (std::exception &e) {}
 
     }
   }
+
+  for (auto &array : arrays) delete [] array;
 
 }
 BENCHMARK_REGISTER_F(TBBBENCHMARK, Basic);
