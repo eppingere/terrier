@@ -100,7 +100,7 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasic)(benchmark::State &state){
         uint64_t size = sizes[size_index];
         uint64_t time;
         common::TaskQueue queue;
-        for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++) {
+        for (uint64_t thread_id = 0; thread_id < static_cast<uint64_t>(num_threads); thread_id++) {
           queue.emplace([&, thread_id] {
             uint64_t start_index = (size / num_threads) * thread_id;
             uint64_t end_index = (size / num_threads) * (thread_id + 1);
