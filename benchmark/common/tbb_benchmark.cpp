@@ -44,8 +44,7 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasic)(benchmark::State &state){
   for (uint64_t i = 0; i < sizes[sizes.size() - 1]; i++)
     array[i] = static_cast<char>(i % sizeof(char));
 
-  for (auto _ : state) {
-    for (int num_threads = 1; num_threads <= static_cast<int>(std::thread::hardware_concurrency()); num_threads++) {
+  for (int num_threads = 1; num_threads <= static_cast<int>(std::thread::hardware_concurrency()); num_threads += 3) {
       for (uint64_t size_index = 0; size_index < sizes.size(); size_index++) {
         try {
           uint64_t size = sizes[size_index];
@@ -66,7 +65,6 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasic)(benchmark::State &state){
 
       }
     }
-  }
 
   delete [] array;
 }
@@ -85,8 +83,7 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasic)(benchmark::State &state){
   for (uint64_t i = 0; i < sizes[sizes.size() - 1]; i++)
     array[i] = static_cast<char>(i % sizeof(char));
 
-  for (auto _ : state) {
-    for (int num_threads = 1; num_threads <= static_cast<int>(std::thread::hardware_concurrency()); num_threads++) {
+  for (int num_threads = 1; num_threads <= static_cast<int>(std::thread::hardware_concurrency()); num_threads += 3) {
       for (uint64_t size_index = 0; size_index < sizes.size(); size_index++) {
         try {
           uint64_t size = sizes[size_index];
@@ -118,11 +115,10 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasic)(benchmark::State &state){
         }
       }
     }
-  }
 
   delete [] array;
 
 }
-BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasic)->Iterations(10)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasic)->Iterations(10)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasic)->Iterations(1)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasic)->Iterations(1)->Unit(benchmark::kMillisecond);
 }
