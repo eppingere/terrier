@@ -149,11 +149,11 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasicNoAllocation)(benchmark::State &state) 
           // Identity element
           uint64_t(0),
           // Reduce a subrange and partial sum
-          [&](const auto &range, uint64_t partial_sum) -> float {
+          [&](const auto &range, uint64_t partial_sum) -> uint64_t {
             return std::accumulate(range.begin(), range.end(), partial_sum);
           },
           // Reduce two partial sums
-          std::plus<uint64_t>());
+          std::plus<>());
     });
     benchmark::DoNotOptimize(sum);
   }
