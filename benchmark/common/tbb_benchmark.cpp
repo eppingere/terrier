@@ -143,8 +143,9 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasicNoAllocation)(benchmark::State &state) 
     tbb::task_arena arena(num_threads);
 
     // Launch.
-    uint64_t sum = arena.execute([&] {
-      return tbb::parallel_reduce(
+    uint64_t sum;
+    arena.execute([&] {
+      sum = tbb::parallel_reduce(
           tbb::blocked_range<std::vector<uint8_t>::const_iterator>(array.begin(), array.end()),
           // Identity element
           uint64_t(0),
