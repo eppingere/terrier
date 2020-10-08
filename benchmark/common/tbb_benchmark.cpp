@@ -160,6 +160,43 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasicNoAllocation)(benchmark::State &state) 
   }
 }
 
+BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)(benchmark::State &state) {
+  // 500 MB array.
+  std::vector<uint8_t> array(500 * 1024 * 1024);
+
+  // Fill with garbage.
+  std::mt19937 gen(std::random_device{}());
+  std::uniform_int_distribution<uint8_t> dist;
+  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
+
+  // Num threads from arguments.
+  const uint32_t num_threads = state.range(0);
+  common::TaskQueue queue;
+  std::atomic<double> total = 0.0;
+  for (uint64_t thread_id = 0; thread_id < static_cast<uint64_t>(num_threads); thread_id++) {
+    queue.emplace([&, thread_id] {
+      uint64_t start_index = (array.size() / num_threads) * thread_id;
+      uint64_t end_index = (array.size() / num_threads) * (thread_id + 1);
+
+      double local_total = 0.0;
+      for (uint64_t i = start_index; i < end_index; i++) local_total += static_cast<double>(array[i]);
+
+      double temp_total;
+      do {
+        temp_total = total;
+      } while (!total.compare_exchange_strong(temp_total, temp_total + local_total));
+    });
+  }
+
+  for (auto _ : state) {
+    // Create thread pool.
+    common::WorkerPool pool(num_threads, queue);
+
+    pool.Startup();
+    pool.WaitUntilAllFinished();
+  }
+}
+
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
@@ -173,6 +210,7 @@ namespace {
 
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasic)->Iterations(5)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasic)->Iterations(5)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 
 }
