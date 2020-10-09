@@ -207,32 +207,33 @@ uint32_t VectorUtil::BitVectorToSelectionVectorSparse(const uint64_t *bit_vector
 
 uint32_t VectorUtil::BitVectorToSelectionVectorDenseAvX2(const uint64_t *bit_vector, uint32_t num_bits,
                                                          sel_t *sel_vector) {
-  // Vector of '8's = [8,8,8,8,8,8,8]
-  const auto eight = _mm_set1_epi16(8);
-
-  // Selection vector write index
-  auto idx = _mm_set1_epi16(0);
-
-  // Selection vector size
-  uint32_t k = 0;
-
-  const uint32_t num_words = common::MathUtil::DivRoundUp(num_bits, 64);
-  for (uint32_t i = 0; i < num_words; i++) {
-    uint64_t word = bit_vector[i];
-    for (uint32_t j = 0; j < 8; j++) {
-      const auto mask = static_cast<uint8_t>(word);
-      word >>= 8u;
-      const __m128i match_pos_scaled =
-          _mm_loadl_epi64(reinterpret_cast<const __m128i *>(&simd::K8_BIT_MATCH_LUT[mask]));
-      const __m128i match_pos = _mm_cvtepi8_epi16(match_pos_scaled);
-      const __m128i pos_vec = _mm_add_epi16(idx, match_pos);
-      idx = _mm_add_epi16(idx, eight);
-      _mm_storeu_si128(reinterpret_cast<__m128i *>(sel_vector + k), pos_vec);
-      k += BitUtil::CountPopulation(static_cast<uint32_t>(mask));
-    }
-  }
-
-  return k;
+//  // Vector of '8's = [8,8,8,8,8,8,8]
+//  const auto eight = _mm_set1_epi16(8);
+//
+//  // Selection vector write index
+//  auto idx = _mm_set1_epi16(0);
+//
+//  // Selection vector size
+//  uint32_t k = 0;
+//
+//  const uint32_t num_words = common::MathUtil::DivRoundUp(num_bits, 64);
+//  for (uint32_t i = 0; i < num_words; i++) {
+//    uint64_t word = bit_vector[i];
+//    for (uint32_t j = 0; j < 8; j++) {
+//      const auto mask = static_cast<uint8_t>(word);
+//      word >>= 8u;
+//      const __m128i match_pos_scaled =
+//          _mm_loadl_epi64(reinterpret_cast<const __m128i *>(&simd::K8_BIT_MATCH_LUT[mask]));
+//      const __m128i match_pos = _mm_cvtepi8_epi16(match_pos_scaled);
+//      const __m128i pos_vec = _mm_add_epi16(idx, match_pos);
+//      idx = _mm_add_epi16(idx, eight);
+//      _mm_storeu_si128(reinterpret_cast<__m128i *>(sel_vector + k), pos_vec);
+//      k += BitUtil::CountPopulation(static_cast<uint32_t>(mask));
+//    }
+//  }
+//
+//  return k;
+  return 0;
 }
 
 #if __AVX512VBMI2__
