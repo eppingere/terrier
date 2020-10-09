@@ -9,9 +9,6 @@
 #include <random>
 #include <thread>
 
-#include "common/scoped_timer.h"
-#include "common/worker_pool.h"
-
 namespace terrier {
 
 class TBBBENCHMARK : public benchmark::Fixture {};
@@ -53,7 +50,6 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasic)(benchmark::State &state){
           uint64_t size = sizes[size_index];
           uint64_t time;
           {
-            common::ScopedTimer<std::chrono::milliseconds> timer(&time);
             tbb::task_arena arena(num_threads);
 
             ParallelRunner runner(array);
@@ -73,58 +69,56 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasic)(benchmark::State &state){
   delete [] array;
 }
 
-BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasic)(benchmark::State &state){
-  std::vector<uint64_t> sizes;
-  uint64_t min_size = 1024 * 1024 * 1024;
-  uint64_t max_size = 64UL * 1024UL * 1024UL * 1024UL;
-//  uint64_t max_size = 5 * min_size;
-  uint64_t num_sizes = 10;
-  uint64_t size_change = (max_size - min_size) / num_sizes;
-  for (uint64_t size = min_size; size <= max_size; size += size_change)
-    sizes.push_back(size);
-
-  char *array = new char[sizes[sizes.size() - 1]];
-  for (uint64_t i = 0; i < sizes[sizes.size() - 1]; i++)
-    array[i] = static_cast<char>(i % sizeof(char));
-
-  for (auto _ : state) {
-    for (int num_threads = 1; num_threads <= static_cast<int>(std::thread::hardware_concurrency()); num_threads += 3) {
-      for (uint64_t size_index = 0; size_index < sizes.size(); size_index++) {
-        try {
-          uint64_t size = sizes[size_index];
-          uint64_t time;
-          common::TaskQueue queue;
-          for (uint64_t thread_id = 0; thread_id < static_cast<uint64_t>(num_threads); thread_id++) {
-            queue.emplace([&, thread_id] {
-              uint64_t start_index = (size / num_threads) * thread_id;
-              uint64_t end_index = (size / num_threads) * (thread_id + 1);
-              char *output = new char[end_index - start_index];
-
-              for (uint64_t i = start_index; i < end_index; i++) output[i - start_index] = array[i];
-
-              delete[] output;
-            });
-          }
-
-          common::WorkerPool thread_pool(num_threads, queue);
-
-          {
-            common::ScopedTimer<std::chrono::milliseconds> timer(&time);
-            thread_pool.Startup();
-            thread_pool.WaitUntilAllFinished();
-          }
-
-          std::cout << num_threads << ", " << size << ", " << time << std::endl;
-
-        } catch (std::exception &e) {
-        }
-      }
-    }
-  }
-
-  delete [] array;
-
-}
+//BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasic)(benchmark::State &state){
+//  std::vector<uint64_t> sizes;
+//  uint64_t min_size = 1024 * 1024 * 1024;
+//  uint64_t max_size = 64UL * 1024UL * 1024UL * 1024UL;
+////  uint64_t max_size = 5 * min_size;
+//  uint64_t num_sizes = 10;
+//  uint64_t size_change = (max_size - min_size) / num_sizes;
+//  for (uint64_t size = min_size; size <= max_size; size += size_change)
+//    sizes.push_back(size);
+//
+//  char *array = new char[sizes[sizes.size() - 1]];
+//  for (uint64_t i = 0; i < sizes[sizes.size() - 1]; i++)
+//    array[i] = static_cast<char>(i % sizeof(char));
+//
+//  for (auto _ : state) {
+//    for (int num_threads = 1; num_threads <= static_cast<int>(std::thread::hardware_concurrency()); num_threads += 3) {
+//      for (uint64_t size_index = 0; size_index < sizes.size(); size_index++) {
+//        try {
+//          uint64_t size = sizes[size_index];
+//          uint64_t time;
+//          common::TaskQueue queue;
+//          for (uint64_t thread_id = 0; thread_id < static_cast<uint64_t>(num_threads); thread_id++) {
+//            queue.emplace([&, thread_id] {
+//              uint64_t start_index = (size / num_threads) * thread_id;
+//              uint64_t end_index = (size / num_threads) * (thread_id + 1);
+//              char *output = new char[end_index - start_index];
+//
+//              for (uint64_t i = start_index; i < end_index; i++) output[i - start_index] = array[i];
+//
+//              delete[] output;
+//            });
+//          }
+//
+////          common::WorkerPool thread_pool(num_threads, queue);
+//
+//          {
+//            thread_pool.Startup();
+//            thread_pool.WaitUntilAllFinished();
+//          }
+//
+//
+//        } catch (std::exception &e) {
+//        }
+//      }
+//    }
+//  }
+//
+//  delete [] array;
+//
+//}
 
 BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasicNoAllocation)(benchmark::State &state) {
   // 500 MB array.
@@ -160,46 +154,46 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasicNoAllocation)(benchmark::State &state) 
   }
 }
 
-BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)(benchmark::State &state) {
-  std::vector<uint8_t> array(state.range(1));
-
-  // Fill with garbage.
-  std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<uint8_t> dist;
-  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
-
-  // Num threads from arguments.
-  const uint32_t num_threads = state.range(0);
-  common::TaskQueue queue;
-  std::atomic<double> total = 0.0;
-  for (uint64_t thread_id = 0; thread_id < static_cast<uint64_t>(num_threads); thread_id++) {
-    queue.emplace([&, thread_id] {
-      uint64_t start_index = (array.size() / num_threads) * thread_id;
-      uint64_t end_index = (array.size() / num_threads) * (thread_id + 1);
-
-      double local_total = 0.0;
-      for (uint64_t i = start_index; i < end_index; i++) local_total += static_cast<double>(array[i]);
-
-      double temp_total;
-      do {
-        temp_total = total;
-      } while (!total.compare_exchange_strong(temp_total, temp_total + local_total));
-    });
-  }
-
-  for (auto _ : state) {
-    // Create thread pool.
-    common::WorkerPool pool(num_threads, queue);
-
-    pool.Startup();
-    pool.WaitUntilAllFinished();
-  }
-}
+//BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)(benchmark::State &state) {
+//  std::vector<uint8_t> array(state.range(1));
+//
+//  // Fill with garbage.
+//  std::mt19937 gen(std::random_device{}());
+//  std::uniform_int_distribution<uint8_t> dist;
+//  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
+//
+//  // Num threads from arguments.
+//  const uint32_t num_threads = state.range(0);
+//  common::TaskQueue queue;
+//  std::atomic<double> total = 0.0;
+//  for (uint64_t thread_id = 0; thread_id < static_cast<uint64_t>(num_threads); thread_id++) {
+//    queue.emplace([&, thread_id] {
+//      uint64_t start_index = (array.size() / num_threads) * thread_id;
+//      uint64_t end_index = (array.size() / num_threads) * (thread_id + 1);
+//
+//      double local_total = 0.0;
+//      for (uint64_t i = start_index; i < end_index; i++) local_total += static_cast<double>(array[i]);
+//
+//      double temp_total;
+//      do {
+//        temp_total = total;
+//      } while (!total.compare_exchange_strong(temp_total, temp_total + local_total));
+//    });
+//  }
+//
+//  for (auto _ : state) {
+//    // Create thread pool.
+//    common::WorkerPool pool(num_threads, queue);
+//
+//    pool.Startup();
+//    pool.WaitUntilAllFinished();
+//  }
+//}
 
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
-    uint64_t sizes[] = {
+    int64_t sizes[] = {
       500 * 1024 * 1024,
       1000 * 1024 * 1024,
       5000UL * 1024 * 1024,
@@ -208,7 +202,7 @@ namespace {
     };
     for (auto &size : sizes) {
       for (int64_t num_threads = 1; num_threads <= std::thread::hardware_concurrency(); num_threads++) {
-        b->Args({num_threads, static_cast<long long>(size)});
+        b->Args({num_threads, size});
       }
     }
   }
