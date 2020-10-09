@@ -350,17 +350,18 @@ class BitVector {
    * @return The index of the n-th 1-bit. If there are fewer than n bits, return the size.
    */
   uint32_t NthOne(uint32_t n) const {
-    for (uint32_t i = 0; i < GetNumWords(); i++) {
-      const WordType word = words_[i];
-      const uint32_t count = BitUtil::CountPopulation(word);
-      if (n < count) {
-        const WordType mask = _pdep_u64(static_cast<WordType>(1) << n, word);
-        const uint32_t pos = BitUtil::CountTrailingZeros(mask);
-        return std::min(GetNumBits(), (i * WORD_SIZE_BITS) + pos);
-      }
-      n -= count;
-    }
-    return GetNumBits();
+//    for (uint32_t i = 0; i < GetNumWords(); i++) {
+//      const WordType word = words_[i];
+//      const uint32_t count = BitUtil::CountPopulation(word);
+//      if (n < count) {
+//        const WordType mask = _pdep_u64(static_cast<WordType>(1) << n, word);
+//        const uint32_t pos = BitUtil::CountTrailingZeros(mask);
+//        return std::min(GetNumBits(), (i * WORD_SIZE_BITS) + pos);
+//      }
+//      n -= count;
+//    }
+//    return GetNumBits();
+      return 0;
   }
 
   /**

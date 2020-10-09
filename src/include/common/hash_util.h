@@ -190,11 +190,12 @@ class EXPORT HashUtil {
   template <typename T>
   static auto HashCrc(T val, hash_t seed) -> std::enable_if_t<std::is_fundamental_v<T>, hash_t> {
     // Thanks HyPer
-    static constexpr hash_t k_default_crc_seed = 0x04c11db7ULL;
+//    static constexpr hash_t k_default_crc_seed = 0x04c11db7ULL;
 
-    uint64_t result1 = _mm_crc32_u64(seed, static_cast<uint64_t>(val));
-    uint64_t result2 = _mm_crc32_u64(k_default_crc_seed, static_cast<uint64_t>(val));
-    return ((result2 << 32u) | result1) * 0x2545f4914f6cdd1dULL;
+//    uint64_t result1 = _mm_crc32_u64(seed, static_cast<uint64_t>(val));
+//    uint64_t result2 = _mm_crc32_u64(k_default_crc_seed, static_cast<uint64_t>(val));
+//    return ((result2 << 32u) | result1) * 0x2545f4914f6cdd1dULL;
+    return 0;
   }
 
   /**

@@ -96,95 +96,96 @@ void VectorUtil::SelectionVectorToByteVector(const sel_t *sel_vector, const uint
 // TODO(pmenon): Consider splitting into dense and sparse implementations.
 uint32_t VectorUtil::ByteVectorToSelectionVector(const uint8_t *byte_vector, const uint32_t num_bytes,
                                                  sel_t *sel_vector) {
-  // Byte-vector index
-  uint32_t i = 0;
-
-  // Selection vector write index
-  uint32_t k = 0;
-
-  // Main vector loop
-  const auto eight = _mm_set1_epi16(8);
-  auto idx = _mm_set1_epi16(0);
-  for (; i + 8 <= num_bytes; i += 8) {
-    const auto word = *reinterpret_cast<const uint64_t *>(byte_vector + i);
-    const auto mask = _pext_u64(word, 0x202020202020202);
-    TERRIER_ASSERT(mask < 256, "Out-of-bounds mask");
-    const auto match_pos_scaled = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(&simd::K8_BIT_MATCH_LUT[mask]));
-    const auto match_pos = _mm_cvtepi8_epi16(match_pos_scaled);
-    const auto pos_vec = _mm_add_epi16(idx, match_pos);
-    idx = _mm_add_epi16(idx, eight);
-    _mm_storeu_si128(reinterpret_cast<__m128i *>(sel_vector + k), pos_vec);
-    k += BitUtil::CountPopulation(static_cast<uint32_t>(mask));
-  }
-
-  // Tail
-  for (; i < num_bytes; i++) {
-    sel_vector[k] = i;
-    k += static_cast<uint32_t>(byte_vector[i] == 0xFF);
-  }
-
-  return k;
+//  // Byte-vector index
+//  uint32_t i = 0;
+//
+//  // Selection vector write index
+//  uint32_t k = 0;
+//
+//  // Main vector loop
+//  const auto eight = _mm_set1_epi16(8);
+//  auto idx = _mm_set1_epi16(0);
+//  for (; i + 8 <= num_bytes; i += 8) {
+//    const auto word = *reinterpret_cast<const uint64_t *>(byte_vector + i);
+//    const auto mask = _pext_u64(word, 0x202020202020202);
+//    TERRIER_ASSERT(mask < 256, "Out-of-bounds mask");
+//    const auto match_pos_scaled = _mm_loadl_epi64(reinterpret_cast<const __m128i *>(&simd::K8_BIT_MATCH_LUT[mask]));
+//    const auto match_pos = _mm_cvtepi8_epi16(match_pos_scaled);
+//    const auto pos_vec = _mm_add_epi16(idx, match_pos);
+//    idx = _mm_add_epi16(idx, eight);
+//    _mm_storeu_si128(reinterpret_cast<__m128i *>(sel_vector + k), pos_vec);
+//    k += BitUtil::CountPopulation(static_cast<uint32_t>(mask));
+//  }
+//
+//  // Tail
+//  for (; i < num_bytes; i++) {
+//    sel_vector[k] = i;
+//    k += static_cast<uint32_t>(byte_vector[i] == 0xFF);
+//  }
+//
+//  return k;
+return 0;
 }
 
 void VectorUtil::ByteVectorToBitVector(const uint8_t *byte_vector, const uint32_t num_bytes, uint64_t *bit_vector) {
-  // Byte-vector index
-  uint32_t i = 0;
-
-  // Bit-vector word index
-  uint32_t k = 0;
-
-  // Main vector loop
-  for (; i + 64 <= num_bytes; i += 64, k++) {
-    const auto v_lo = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(byte_vector + i));
-    const auto v_hi = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(byte_vector + i + 32));
-    const auto hi = static_cast<uint32_t>(_mm256_movemask_epi8(v_hi));
-    const auto lo = static_cast<uint32_t>(_mm256_movemask_epi8(v_lo));
-    bit_vector[k] = (static_cast<uint64_t>(hi) << 32u) | lo;
-  }
-
-  // Tail
-  for (; i < num_bytes; i++) {
-    const auto val = static_cast<int8_t>(byte_vector[i]);
-    const auto mask = static_cast<uint64_t>(1) << (i % 64u);
-    bit_vector[k] ^= (static_cast<uint64_t>(val) ^ bit_vector[k]) & mask;
-  }
+//  // Byte-vector index
+//  uint32_t i = 0;
+//
+//  // Bit-vector word index
+//  uint32_t k = 0;
+//
+//  // Main vector loop
+//  for (; i + 64 <= num_bytes; i += 64, k++) {
+//    const auto v_lo = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(byte_vector + i));
+//    const auto v_hi = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(byte_vector + i + 32));
+//    const auto hi = static_cast<uint32_t>(_mm256_movemask_epi8(v_hi));
+//    const auto lo = static_cast<uint32_t>(_mm256_movemask_epi8(v_lo));
+//    bit_vector[k] = (static_cast<uint64_t>(hi) << 32u) | lo;
+//  }
+//
+//  // Tail
+//  for (; i < num_bytes; i++) {
+//    const auto val = static_cast<int8_t>(byte_vector[i]);
+//    const auto mask = static_cast<uint64_t>(1) << (i % 64u);
+//    bit_vector[k] ^= (static_cast<uint64_t>(val) ^ bit_vector[k]) & mask;
+//  }
 }
 
 void VectorUtil::BitVectorToByteVector(const uint64_t *bit_vector, const uint32_t num_bits, uint8_t *byte_vector) {
-  const __m256i shuffle =
-      _mm256_setr_epi64x(0x0000000000000000, 0x0101010101010101, 0x0202020202020202, 0x0303030303030303);
-  const __m256i bit_mask = _mm256_set1_epi64x(0x7fbfdfeff7fbfdfe);
-
-  // Byte-vector write index
-  uint32_t k = 0;
-
-  // Main vector loop processes 64 elements per iteration
-  for (uint32_t i = 0; i < num_bits / 64; i++, k += 64) {
-    uint64_t word = bit_vector[i];
-
-    // Lower 32-bits first
-    __m256i vmask = _mm256_set1_epi32(static_cast<uint32_t>(word));
-    vmask = _mm256_shuffle_epi8(vmask, shuffle);
-    vmask = _mm256_or_si256(vmask, bit_mask);
-    __m256i vbytes = _mm256_cmpeq_epi8(vmask, _mm256_set1_epi64x(-1));
-    _mm256_storeu_si256(reinterpret_cast<__m256i *>(byte_vector + k), vbytes);
-
-    // Upper 32-bits
-    vmask = _mm256_set1_epi32(static_cast<int32_t>(word >> 32u));
-    vmask = _mm256_shuffle_epi8(vmask, shuffle);
-    vmask = _mm256_or_si256(vmask, bit_mask);
-    vbytes = _mm256_cmpeq_epi8(vmask, _mm256_set1_epi64x(-1));
-    _mm256_storeu_si256(reinterpret_cast<__m256i *>(byte_vector + k + 32), vbytes);
-  }
-
-  // Process last word in scalar loop
-  if (auto tail_size = num_bits % 64; tail_size != 0) {
-    uint64_t word = bit_vector[num_bits / 64];
-    for (uint32_t i = 0; i < tail_size; i++, k++) {
-      byte_vector[k] = -static_cast<uint8_t>((word & 0x1ull) == 1);
-      word >>= 1u;
-    }
-  }
+//  const __m256i shuffle =
+//      _mm256_setr_epi64x(0x0000000000000000, 0x0101010101010101, 0x0202020202020202, 0x0303030303030303);
+//  const __m256i bit_mask = _mm256_set1_epi64x(0x7fbfdfeff7fbfdfe);
+//
+//  // Byte-vector write index
+//  uint32_t k = 0;
+//
+//  // Main vector loop processes 64 elements per iteration
+//  for (uint32_t i = 0; i < num_bits / 64; i++, k += 64) {
+//    uint64_t word = bit_vector[i];
+//
+//    // Lower 32-bits first
+//    __m256i vmask = _mm256_set1_epi32(static_cast<uint32_t>(word));
+//    vmask = _mm256_shuffle_epi8(vmask, shuffle);
+//    vmask = _mm256_or_si256(vmask, bit_mask);
+//    __m256i vbytes = _mm256_cmpeq_epi8(vmask, _mm256_set1_epi64x(-1));
+//    _mm256_storeu_si256(reinterpret_cast<__m256i *>(byte_vector + k), vbytes);
+//
+//    // Upper 32-bits
+//    vmask = _mm256_set1_epi32(static_cast<int32_t>(word >> 32u));
+//    vmask = _mm256_shuffle_epi8(vmask, shuffle);
+//    vmask = _mm256_or_si256(vmask, bit_mask);
+//    vbytes = _mm256_cmpeq_epi8(vmask, _mm256_set1_epi64x(-1));
+//    _mm256_storeu_si256(reinterpret_cast<__m256i *>(byte_vector + k + 32), vbytes);
+//  }
+//
+//  // Process last word in scalar loop
+//  if (auto tail_size = num_bits % 64; tail_size != 0) {
+//    uint64_t word = bit_vector[num_bits / 64];
+//    for (uint32_t i = 0; i < tail_size; i++, k++) {
+//      byte_vector[k] = -static_cast<uint8_t>((word & 0x1ull) == 1);
+//      word >>= 1u;
+//    }
+//  }
 }
 
 uint32_t VectorUtil::BitVectorToSelectionVectorSparse(const uint64_t *bit_vector, uint32_t num_bits,

@@ -37,45 +37,46 @@ void BloomFilter::Init(MemoryPool *memory, uint32_t expected_num_elems) {
 }
 
 void BloomFilter::Add(hash_t hash) {
-  auto block_idx = static_cast<uint32_t>(hash & block_mask_);
-
-  auto block = util::simd::Vec8().Load(blocks_[block_idx]);
-  auto alt_hash = util::simd::Vec8(static_cast<uint32_t>(hash >> 32));
-  auto salts = util::simd::Vec8().Load(SALTS);
-
-  alt_hash *= salts;
-  if constexpr (util::simd::Bitwidth::VALUE != 256) {
-    // Make sure we're dealing with 32-bit values
-    alt_hash &= util::simd::Vec8(std::numeric_limits<uint32_t>::max() - 1);
-  }
-  alt_hash >>= 27;
-
-  auto masks = util::simd::Vec8(1) << alt_hash;
-
-  block |= masks;
-
-  block.Store(blocks_[block_idx]);
-
-  num_additions_++;
+//  auto block_idx = static_cast<uint32_t>(hash & block_mask_);
+//
+//  auto block = util::simd::Vec8().Load(blocks_[block_idx]);
+//  auto alt_hash = util::simd::Vec8(static_cast<uint32_t>(hash >> 32));
+//  auto salts = util::simd::Vec8().Load(SALTS);
+//
+//  alt_hash *= salts;
+//  if constexpr (util::simd::Bitwidth::VALUE != 256) {
+//    // Make sure we're dealing with 32-bit values
+//    alt_hash &= util::simd::Vec8(std::numeric_limits<uint32_t>::max() - 1);
+//  }
+//  alt_hash >>= 27;
+//
+//  auto masks = util::simd::Vec8(1) << alt_hash;
+//
+//  block |= masks;
+//
+//  block.Store(blocks_[block_idx]);
+//
+//  num_additions_++;
 }
 
 bool BloomFilter::Contains(hash_t hash) const {
-  auto block_idx = static_cast<uint32_t>(hash & block_mask_);
-
-  auto block = util::simd::Vec8().Load(blocks_[block_idx]);
-  auto alt_hash = util::simd::Vec8(static_cast<uint32_t>(hash >> 32));
-  auto salts = util::simd::Vec8().Load(SALTS);
-
-  alt_hash *= salts;
-  if constexpr (util::simd::Bitwidth::VALUE != 256) {
-    // Make sure we're dealing with 32-bit values
-    alt_hash &= util::simd::Vec8(std::numeric_limits<uint32_t>::max() - 1);
-  }
-  alt_hash >>= 27;
-
-  auto masks = util::simd::Vec8(1) << alt_hash;
-
-  return block.AllBitsAtPositionsSet(masks);
+//  auto block_idx = static_cast<uint32_t>(hash & block_mask_);
+//
+//  auto block = util::simd::Vec8().Load(blocks_[block_idx]);
+//  auto alt_hash = util::simd::Vec8(static_cast<uint32_t>(hash >> 32));
+//  auto salts = util::simd::Vec8().Load(SALTS);
+//
+//  alt_hash *= salts;
+//  if constexpr (util::simd::Bitwidth::VALUE != 256) {
+//    // Make sure we're dealing with 32-bit values
+//    alt_hash &= util::simd::Vec8(std::numeric_limits<uint32_t>::max() - 1);
+//  }
+//  alt_hash >>= 27;
+//
+//  auto masks = util::simd::Vec8(1) << alt_hash;
+//
+//  return block.AllBitsAtPositionsSet(masks);
+    return true;
 }
 
 uint64_t BloomFilter::GetTotalBitsSet() const {
