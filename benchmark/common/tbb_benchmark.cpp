@@ -24,27 +24,27 @@ static uint64_t sum_restricted(const uint8_t *__restrict__ a, uint64_t start_ind
   return total;
 }
 
-static uint64_t sum_vectorized(const uint8_t * a, uint64_t start_index, uint64_t end_index) {
-  uint64_t total = 0;
-
-  uint64_t i;
-#pragma ivdep
-  for (i = start_index; i < end_index; i++)
-    total += static_cast<uint64_t>(a[i]);
-
-  return total;
-}
-
-static uint64_t sum_both(const uint8_t * __restrict__ a, uint64_t start_index, uint64_t end_index) {
-  uint64_t total = 0;
-
-  uint64_t i;
-#pragma ivdep
-  for (i = start_index; i < end_index; i++)
-    total += static_cast<uint64_t>(a[i]);
-
-  return total;
-}
+//static uint64_t sum_vectorized(const uint8_t * a, uint64_t start_index, uint64_t end_index) {
+//  uint64_t total = 0;
+//
+//  uint64_t i;
+//#pragma ivdep
+//  for (i = start_index; i < end_index; i++)
+//    total += static_cast<uint64_t>(a[i]);
+//
+//  return total;
+//}
+//
+//static uint64_t sum_both(const uint8_t * __restrict__ a, uint64_t start_index, uint64_t end_index) {
+//  uint64_t total = 0;
+//
+//  uint64_t i;
+//#pragma ivdep
+//  for (i = start_index; i < end_index; i++)
+//    total += static_cast<uint64_t>(a[i]);
+//
+//  return total;
+//}
 
 BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasicNoAllocation)(benchmark::State &state) {
   // 500 MB array.
@@ -154,62 +154,62 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)(benchmark:
     pool.WaitUntilAllFinished();
   }
 }
-BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolVectorized)(benchmark::State &state) {
-  uint64_t size = static_cast<uint64_t>(state.range(1));
-  std::vector<uint8_t> array(size);
-
-  // Fill with garbage.
-  std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<uint8_t> dist;
-  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
-
-  // Num threads from arguments.
-  const uint32_t num_threads = state.range(0);
-
-  for (auto _ : state) {
-    // Create thread pool.
-    std::atomic<uint64_t> total = 0;
-    common::WorkerPool pool(num_threads, {});
-    pool.Startup();
-
-    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++)
-      pool.SubmitTask([&, thread_id] {
-        uint64_t start_index = (array.size() / num_threads) * thread_id;
-        uint64_t end_index = (array.size() / num_threads) * (thread_id + 1);
-        total += sum_vectorized(array.data(), start_index, end_index);
-      });
-
-    pool.WaitUntilAllFinished();
-  }
-}
-BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolBoth)(benchmark::State &state) {
-  uint64_t size = static_cast<uint64_t>(state.range(1));
-  std::vector<uint8_t> array(size);
-
-  // Fill with garbage.
-  std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<uint8_t> dist;
-  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
-
-  // Num threads from arguments.
-  const uint32_t num_threads = state.range(0);
-
-  for (auto _ : state) {
-    // Create thread pool.
-    std::atomic<uint64_t> total = 0;
-    common::WorkerPool pool(num_threads, {});
-    pool.Startup();
-
-    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++)
-      pool.SubmitTask([&, thread_id] {
-        uint64_t start_index = (array.size() / num_threads) * thread_id;
-        uint64_t end_index = (array.size() / num_threads) * (thread_id + 1);
-        total += sum_both(array.data(), start_index, end_index);
-      });
-
-    pool.WaitUntilAllFinished();
-  }
-}
+//BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolVectorized)(benchmark::State &state) {
+//  uint64_t size = static_cast<uint64_t>(state.range(1));
+//  std::vector<uint8_t> array(size);
+//
+//  // Fill with garbage.
+//  std::mt19937 gen(std::random_device{}());
+//  std::uniform_int_distribution<uint8_t> dist;
+//  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
+//
+//  // Num threads from arguments.
+//  const uint32_t num_threads = state.range(0);
+//
+//  for (auto _ : state) {
+//    // Create thread pool.
+//    std::atomic<uint64_t> total = 0;
+//    common::WorkerPool pool(num_threads, {});
+//    pool.Startup();
+//
+//    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++)
+//      pool.SubmitTask([&, thread_id] {
+//        uint64_t start_index = (array.size() / num_threads) * thread_id;
+//        uint64_t end_index = (array.size() / num_threads) * (thread_id + 1);
+//        total += sum_vectorized(array.data(), start_index, end_index);
+//      });
+//
+//    pool.WaitUntilAllFinished();
+//  }
+//}
+//BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolBoth)(benchmark::State &state) {
+//  uint64_t size = static_cast<uint64_t>(state.range(1));
+//  std::vector<uint8_t> array(size);
+//
+//  // Fill with garbage.
+//  std::mt19937 gen(std::random_device{}());
+//  std::uniform_int_distribution<uint8_t> dist;
+//  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
+//
+//  // Num threads from arguments.
+//  const uint32_t num_threads = state.range(0);
+//
+//  for (auto _ : state) {
+//    // Create thread pool.
+//    std::atomic<uint64_t> total = 0;
+//    common::WorkerPool pool(num_threads, {});
+//    pool.Startup();
+//
+//    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++)
+//      pool.SubmitTask([&, thread_id] {
+//        uint64_t start_index = (array.size() / num_threads) * thread_id;
+//        uint64_t end_index = (array.size() / num_threads) * (thread_id + 1);
+//        total += sum_both(array.data(), start_index, end_index);
+//      });
+//
+//    pool.WaitUntilAllFinished();
+//  }
+//}
 
 namespace {
 
@@ -236,8 +236,8 @@ namespace {
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolVectorized)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolBoth)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolVectorized)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolBoth)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 
 
 }
