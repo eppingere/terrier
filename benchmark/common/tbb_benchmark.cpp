@@ -28,7 +28,7 @@ static uint64_t sum_vectorized(const uint8_t * a, uint64_t start_index, uint64_t
   uint64_t total = 0;
 
   uint64_t i;
-#pragma simd
+#pragma ivdep
   for (i = start_index; i < end_index; i++)
     total += static_cast<uint64_t>(a[i]);
 
@@ -39,7 +39,7 @@ static uint64_t sum_both(const uint8_t * __restrict__ a, uint64_t start_index, u
   uint64_t total = 0;
 
   uint64_t i;
-#pragma simd
+#pragma ivdep
   for (i = start_index; i < end_index; i++)
     total += static_cast<uint64_t>(a[i]);
 
