@@ -20,7 +20,7 @@ class TBBBENCHMARK : public benchmark::Fixture {};
 std::vector<uint8_t> parallel_load(uint64_t size) {
   std::vector<uint8_t> output(size);
   common::TaskQueue queue;
-  for (int thread_id = 0; thread_id < std::thread::hardware_concurrency(); thread_id++) {
+  for (uint64_t thread_id = 0; thread_id < std::thread::hardware_concurrency(); thread_id++) {
     queue.emplace([&, thread_id] {
       uint64_t start_index = (size/ std::thread::hardware_concurrency()) * thread_id;
       uint64_t end_index = (size / std::thread::hardware_concurrency()) * (thread_id + 1);
