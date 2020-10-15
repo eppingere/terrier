@@ -8,6 +8,8 @@
 #include <iostream>
 #include <random>
 #include <thread>
+#include <algorithm>
+#include <numeric>
 
 #include "common/worker_pool.h"
 
@@ -138,6 +140,9 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)(benchmark:
   // Num threads from arguments.
   const uint32_t num_threads = state.range(0);
 
+  std::string x;
+  std::cin >> x;
+
   for (auto _ : state) {
     // Create thread pool.
     std::atomic<uint64_t> total = 0;
@@ -154,34 +159,7 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)(benchmark:
     pool.WaitUntilAllFinished();
   }
 }
-//BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolVectorized)(benchmark::State &state) {
-//  uint64_t size = static_cast<uint64_t>(state.range(1));
-//  std::vector<uint8_t> array(size);
-//
-//  // Fill with garbage.
-//  std::mt19937 gen(std::random_device{}());
-//  std::uniform_int_distribution<uint8_t> dist;
-//  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
-//
-//  // Num threads from arguments.
-//  const uint32_t num_threads = state.range(0);
-//
-//  for (auto _ : state) {
-//    // Create thread pool.
-//    std::atomic<uint64_t> total = 0;
-//    common::WorkerPool pool(num_threads, {});
-//    pool.Startup();
-//
-//    for (uint64_t thread_id = 0; thread_id < num_threads; thread_id++)
-//      pool.SubmitTask([&, thread_id] {
-//        uint64_t start_index = (array.size() / num_threads) * thread_id;
-//        uint64_t end_index = (array.size() / num_threads) * (thread_id + 1);
-//        total += sum_vectorized(array.data(), start_index, end_index);
-//      });
-//
-//    pool.WaitUntilAllFinished();
-//  }
-//}
+
 //BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolBoth)(benchmark::State &state) {
 //  uint64_t size = static_cast<uint64_t>(state.range(1));
 //  std::vector<uint8_t> array(size);
@@ -222,7 +200,7 @@ namespace {
 //      50000UL * 1024 * 1024,
     };
     for (auto &size : sizes) {
-      for (int64_t num_threads = 1; num_threads <= std::thread::hardware_concurrency(); num_threads++) {
+      for (int64_t num_threads = std::thread::hardware_concurrency(); num_threads <= std::thread::hardware_concurrency(); num_threads++) {
         b->Args({num_threads, size});
       }
     }
@@ -236,8 +214,5 @@ namespace {
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-//BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolVectorized)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-//BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolBoth)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-
-
+//BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolSTDReduce)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 }
