@@ -17,6 +17,25 @@ namespace terrier {
 
 class TBBBENCHMARK : public benchmark::Fixture {};
 
+std::vector<uint8_t> parallel_load(uint64_t size) {
+  std::vector<uint8_t> output(size);
+  common::TaskQueue queue;
+  for (int thread_id = 0; thread_id < std::thread::hardware_concurrency(); thread_id++) {
+    queue.emplace([&, thread_id] {
+      uint64_t start_index = (size/ std::thread::hardware_concurrency()) * thread_id;
+      uint64_t end_index = (size / std::thread::hardware_concurrency()) * (thread_id + 1);
+      for (uint64_t i = start_index; i < end_index; i++)
+        output[i] = static_cast<uint8_t>(i % 256);
+    });
+  }
+
+  common::WorkerPool pool(std::thread::hardware_concurrency(), queue);
+  pool.Startup();
+  pool.WaitUntilAllFinished();
+
+  return output;
+}
+
 static uint64_t sum_restricted(const uint8_t *__restrict__ a, uint64_t start_index, uint64_t end_index) {
   uint64_t total = 0;
 
@@ -50,12 +69,7 @@ static uint64_t sum_restricted(const uint8_t *__restrict__ a, uint64_t start_ind
 
 BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasicNoAllocation)(benchmark::State &state) {
   // 500 MB array.
-  std::vector<uint8_t> array(state.range(1));
-
-  // Fill with garbage.
-  std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<uint8_t> dist;
-  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
+  std::vector<uint8_t> array = parallel_load(state.range(1));
 
   // Num threads from arguments.
   const uint32_t num_threads = state.range(0);
