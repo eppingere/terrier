@@ -144,18 +144,12 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)(benchmark::State &
 
 BENCHMARK_DEFINE_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)(benchmark::State &state) {
   uint64_t size = static_cast<uint64_t>(state.range(1));
-  std::vector<uint8_t> array(size);
+  std::vector<uint8_t> array = parallel_load(size);
 
   // Fill with garbage.
-  std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<uint8_t> dist;
-  std::generate(array.begin(), array.end(), [&]() { return dist(gen); });
 
   // Num threads from arguments.
   const uint32_t num_threads = state.range(0);
-
-  std::string x;
-  std::cin >> x;
 
   for (auto _ : state) {
     // Create thread pool.
