@@ -208,9 +208,9 @@ namespace {
   static void CustomArguments(benchmark::internal::Benchmark *b) {
     int64_t sizes[] = {
 //      500 * 1024 * 1024,
-      1000 * 1024 * 1024,
-      5000UL * 1024 * 1024,
-      10000UL * 1024 * 1024,
+//      1000 * 1024 * 1024,
+//      5000UL * 1024 * 1024,
+//      10000UL * 1024 * 1024,
       50000UL * 1024 * 1024,
     };
     for (auto &size : sizes) {
