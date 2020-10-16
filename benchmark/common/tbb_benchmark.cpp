@@ -208,9 +208,9 @@ namespace {
   static void CustomArguments(benchmark::internal::Benchmark *b) {
     int64_t sizes[] = {
 //      500 * 1024 * 1024,
-//      1000 * 1024 * 1024,
-//      5000UL * 1024 * 1024,
-//      10000UL * 1024 * 1024,
+      1000 * 1024 * 1024,
+      5000UL * 1024 * 1024,
+      10000UL * 1024 * 1024,
       50000UL * 1024 * 1024,
     };
     for (auto &size : sizes) {
@@ -225,8 +225,8 @@ namespace {
 
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasic)->Iterations(5)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasic)->Iterations(5)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-//BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolSTDReduce)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 }
