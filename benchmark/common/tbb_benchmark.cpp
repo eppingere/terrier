@@ -219,7 +219,7 @@ namespace {
 
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasic)->Iterations(5)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasic)->Iterations(5)->Unit(benchmark::kMillisecond);
-//BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolSTDReduce)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
