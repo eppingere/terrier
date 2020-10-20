@@ -74,6 +74,9 @@ BENCHMARK_DEFINE_F(TBBBENCHMARK, TBBBasicNoAllocation)(benchmark::State &state) 
   // Num threads from arguments.
   const uint32_t num_threads = state.range(0);
 
+  std::string x;
+  std::cin >> x;
+
   for (auto _ : state) {
     // Create thread pool.
     tbb::task_arena arena(num_threads);
@@ -208,7 +211,11 @@ namespace {
       50000UL * 1024 * 1024,
     };
     for (auto &size : sizes) {
-      for (int64_t num_threads = 1; num_threads <= std::thread::hardware_concurrency(); num_threads++) {
+      int64_t min = 1;
+      int64_t max = std::thread::hardware_concurrency();
+      max = 1;
+      
+      for (int64_t num_threads = min; num_threads <= max; num_threads++) {
         b->Args({num_threads, size});
       }
     }
@@ -221,6 +228,6 @@ namespace {
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasic)->Iterations(5)->Unit(benchmark::kMillisecond);
 BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolSTDReduce)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 }
