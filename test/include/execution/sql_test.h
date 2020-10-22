@@ -54,9 +54,9 @@ class SqlBasedTest : public TplTest {
                                                       const planner::OutputSchema *schema = nullptr,
                                                       bool force_serial = false) {
     exec::ExecutionSettings settings = *exec_settings_;
-    if (force_serial) {
-      settings.is_parallel_execution_enabled_ = false;
-    }
+//    if (force_serial) {
+//      settings.is_parallel_execution_enabled_ = false;
+//    }
 
     exec::OutputCallback empty = nullptr;
     const auto &callback_ref = (callback == nullptr) ? empty : *callback;

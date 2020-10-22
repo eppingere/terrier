@@ -824,7 +824,7 @@ TEST_F(CompilerTest, SimpleIndexScanLimitDescendingTest) {
 TEST_F(CompilerTest, SimpleAggregateTest) {
   // SELECT col2, SUM(col1) FROM test_1 WHERE col1 < 1000 GROUP BY col2;
   // Get accessor
-  uint64_t num_iters = 1000;
+  uint64_t num_iters = 10000;
   for (uint64_t _ = 0; _ < num_iters; _++) {
     auto accessor = MakeAccessor();
     ExpressionMaker expr_maker;
