@@ -213,7 +213,7 @@ namespace {
     for (auto &size : sizes) {
       int64_t min = 1;
       int64_t max = std::thread::hardware_concurrency();
-      max = 1;
+//      max = 1;
       
       for (int64_t num_threads = min; num_threads <= max; num_threads++) {
         b->Args({num_threads, size});
@@ -228,6 +228,6 @@ namespace {
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasic)->Iterations(5)->Unit(benchmark::kMillisecond);
 BENCHMARK_REGISTER_F(TBBBENCHMARK, TBBBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, WorkerPoolBasicNoAllocation)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-//BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolRestricted)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBBENCHMARK, VectorizationInWorkerPoolSTDReduce)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 }
