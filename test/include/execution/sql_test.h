@@ -53,7 +53,7 @@ class SqlBasedTest : public TplTest {
   std::unique_ptr<exec::ExecutionContext> MakeExecCtx(exec::OutputCallback *callback = nullptr,
                                                       const planner::OutputSchema *schema = nullptr,
                                                       bool force_serial = false) {
-    exec::ExecutionSettings settings = *exec_settings_;
+//    exec::ExecutionSettings settings = *exec_settings_;
 //    if (force_serial) {
 //      settings.is_parallel_execution_enabled_ = false;
 //    }
@@ -61,7 +61,7 @@ class SqlBasedTest : public TplTest {
     exec::OutputCallback empty = nullptr;
     const auto &callback_ref = (callback == nullptr) ? empty : *callback;
     return std::make_unique<exec::ExecutionContext>(test_db_oid_, common::ManagedPointer(test_txn_), callback_ref,
-                                                    schema, common::ManagedPointer(accessor_), settings,
+                                                    schema, common::ManagedPointer(accessor_), *exec_settings_,
                                                     metrics_manager_);
   }
 

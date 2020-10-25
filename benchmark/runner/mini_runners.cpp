@@ -1,5 +1,3 @@
-#include <gflags/gflags.h>
-
 #include <cstdio>
 #include <functional>
 #include <pqxx/pqxx>  // NOLINT
@@ -21,6 +19,7 @@
 #include "execution/table_generator/table_generator.h"
 #include "execution/util/cpu_info.h"
 #include "execution/vm/module.h"
+#include "gflags/gflags.h"
 #include "loggers/loggers_util.h"
 #include "main/db_main.h"
 #include "optimizer/cost_model/forced_cost_model.h"
@@ -505,6 +504,9 @@ class MiniRunners : public benchmark::Fixture {
     transaction::TransactionContext *txn = nullptr;
     std::unique_ptr<catalog::CatalogAccessor> accessor = nullptr;
     std::vector<std::vector<parser::ConstantValueExpression>> param_ref = *params;
+
+    execution::exec::NoOpResultConsumer consumer;
+    execution::exec::OutputCallback callback = consumer;
     for (auto i = 0; i < num_iters; i++) {
       common::ManagedPointer<metrics::MetricsManager> metrics_manager = nullptr;
       if (i == num_iters - 1) {
@@ -520,9 +522,9 @@ class MiniRunners : public benchmark::Fixture {
         exec_settings = *settings;
       }
 
-      auto exec_ctx = std::make_unique<execution::exec::ExecutionContext>(
-          db_oid, common::ManagedPointer(txn), execution::exec::NoOpResultConsumer(), out_schema,
-          common::ManagedPointer(accessor), exec_settings, metrics_manager);
+      auto exec_ctx = std::make_unique<execution::exec::ExecutionContext>(db_oid, common::ManagedPointer(txn), callback,
+                                                                          out_schema, common::ManagedPointer(accessor),
+                                                                          exec_settings, metrics_manager);
 
       // Attach params to ExecutionContext
       if (static_cast<size_t>(i) < param_ref.size()) {
@@ -694,7 +696,8 @@ void NetworkQueriesOutputRunners(pqxx::work *txn) {
             db_main->GetMetricsManager()->DisableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE);
             metrics_enabled = false;
           } else if (i == iters - 1 && !metrics_enabled) {
-            db_main->GetMetricsManager()->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE, 0);
+            db_main->GetMetricsManager()->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE);
+            db_main->GetMetricsManager()->SetMetricSampleInterval(metrics::MetricsComponent::EXECUTION_PIPELINE, 0);
             metrics_enabled = true;
           }
 
@@ -764,7 +767,8 @@ void NetworkQueriesCreateIndexRunners(pqxx::work *txn) {
               db_main->GetMetricsManager()->DisableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE);
               metrics_enabled = false;
             } else if (i == iters - 1 && !metrics_enabled) {
-              db_main->GetMetricsManager()->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE, 0);
+              db_main->GetMetricsManager()->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE);
+              db_main->GetMetricsManager()->SetMetricSampleInterval(metrics::MetricsComponent::EXECUTION_PIPELINE, 0);
               metrics_enabled = true;
             }
 
@@ -892,9 +896,11 @@ BENCHMARK_DEFINE_F(MiniRunners, SEQ0_OutputRunners)(benchmark::State &state) {
 
   auto exec_settings = GetExecutionSettings();
   execution::compiler::ExecutableQuery::query_identifier.store(MiniRunners::query_id++);
-  auto exec_ctx = std::make_unique<execution::exec::ExecutionContext>(
-      db_oid, common::ManagedPointer(txn), execution::exec::NoOpResultConsumer(), schema.get(),
-      common::ManagedPointer(accessor), exec_settings, metrics_manager_);
+  execution::exec::NoOpResultConsumer consumer;
+  execution::exec::OutputCallback callback = consumer;
+  auto exec_ctx = std::make_unique<execution::exec::ExecutionContext>(db_oid, common::ManagedPointer(txn), callback,
+                                                                      schema.get(), common::ManagedPointer(accessor),
+                                                                      exec_settings, metrics_manager_);
 
   auto exec_query =
       execution::compiler::ExecutableQuery(output.str(), common::ManagedPointer(exec_ctx), false, 16, exec_settings);
@@ -1730,7 +1736,8 @@ void InitializeRunnersState() {
   auto block_store = db_main->GetStorageLayer()->GetBlockStore();
   auto catalog = db_main->GetCatalogLayer()->GetCatalog();
   auto txn_manager = db_main->GetTransactionLayer()->GetTransactionManager();
-  db_main->GetMetricsManager()->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE, 0);
+  db_main->GetMetricsManager()->EnableMetric(metrics::MetricsComponent::EXECUTION_PIPELINE);
+  db_main->GetMetricsManager()->SetMetricSampleInterval(metrics::MetricsComponent::EXECUTION_PIPELINE, 0);
 
   // Create the database
   auto txn = txn_manager->BeginTransaction();
