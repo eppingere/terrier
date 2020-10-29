@@ -58,7 +58,6 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
     // Create thread pool.
     std::atomic<uint64_t>* num_done = new std::atomic<uint64_t>[num_jobs];
     std::vector<uint64_t> num_threads_per_job(num_jobs);
-    std::vector<std::chrono::time_point<std::chrono::high_resolution_clock>> start_time(num_jobs);
     std::vector<std::chrono::time_point<std::chrono::high_resolution_clock>> end_time(num_jobs);
     for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
       num_done[job_num] = 0;
@@ -73,8 +72,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
 
 
     for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
-      start_time[job_num] = std::chrono::high_resolution_clock::now();
-      uint64_t num_threads_for_job = num_threads_per_job[job_num];
+      uint64_t num_threads_for_job = std::max<uint64_t>(1, num_threads_per_job[job_num]);
       for (uint64_t thread_id = 0; thread_id < num_threads_for_job; thread_id++)
         queue.push([&, thread_id, job_num, num_threads_for_job] {
           uint64_t start_index = (arrays[job_num].size() / num_threads_for_job) * thread_id;
@@ -90,13 +88,15 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
 
 //    std::cout << "num jobs: " << num_jobs << std::endl;
 //    std::cout << "queue size: " << queue.size() << std::endl;
+    TERRIER_ASSERT(queue.size() >= num_threads, "there should be as many jobs as threads");
+    auto start_time = std::chrono::high_resolution_clock::now();
     common::WorkerPool pool(num_threads, queue);
     pool.Startup();
     pool.WaitUntilAllFinished();
 
     uint64_t total_ms = 0;
     for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
-      total_ms += std::chrono::duration_cast<std::chrono::milliseconds>(end_time[job_num] - start_time[job_num]).count();
+      total_ms += std::chrono::duration_cast<std::chrono::milliseconds>(end_time[job_num] - start_time).count();
     }
 
     double total_ms_double = static_cast<double>(total_ms);
@@ -112,7 +112,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
-    int64_t size = 2000 * 1024 * 1024;
+    int64_t size = 1 * 1024 * 1024;
     int64_t min = 1;
     int64_t max = std::thread::hardware_concurrency();
 
