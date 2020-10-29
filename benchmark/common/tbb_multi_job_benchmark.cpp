@@ -112,7 +112,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
-    int64_t size = 1 * 1024 * 1024;
+    int64_t size = 2000 * 1024 * 1024;
     int64_t min = 1;
     int64_t max = std::thread::hardware_concurrency();
 
