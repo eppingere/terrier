@@ -3,13 +3,14 @@
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/task_arena.h>
+#include <tbb/task_scheduler_init.h>
 
+#include <algorithm>
 #include <exception>
 #include <iostream>
+#include <numeric>
 #include <random>
 #include <thread>
-#include <algorithm>
-#include <numeric>
 
 #include "common/worker_pool.h"
 
@@ -109,12 +110,61 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
   }
 }
 
+BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) {
+  const uint32_t num_threads = state.range(0);
+  uint64_t size = static_cast<uint64_t>(state.range(1));
+  uint64_t num_jobs = static_cast<uint64_t>(state.range(2));
+
+  std::vector<std::vector<uint8_t>> arrays;
+  for (uint64_t i = 0; i < num_jobs; i++)
+    arrays.emplace_back(parallel_load(size));
+
+  for (auto _ : state) {
+    // Create thread pool.
+    std::vector<std::chrono::time_point<std::chrono::high_resolution_clock>> end_time(num_jobs);
+    std::vector<std::thread> threads;
+
+    tbb::task_arena arena(num_threads);
+
+    arena.execute([&] {
+      auto start_time = std::chrono::high_resolution_clock::now();
+
+
+      for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
+        auto range = tbb::blocked_range<std::vector<uint8_t>::const_iterator>(arrays[job_num].begin(), arrays[job_num].end());
+
+        threads.push_back(std::thread([&, job_num] {
+          tbb::parallel_reduce(range, uint64_t(0),
+          [&](const auto &range, uint64_t partial_sum) -> uint64_t {
+          return std::accumulate(range.begin(), range.end(), partial_sum);
+          }, std::plus<>());
+
+          end_time[job_num] = std::chrono::high_resolution_clock::now();
+        }));
+
+      }
+
+      for (uint64_t job_num = 0; job_num < num_jobs; job_num++)
+        threads[job_num].join();
+
+      uint64_t total_ms = 0;
+      for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
+        total_ms += std::chrono::duration_cast<std::chrono::milliseconds>(end_time[job_num] - start_time).count();
+      }
+
+      double total_ms_double = static_cast<double>(total_ms);
+      double total_jobs_double = static_cast<double>(num_jobs);
+
+      state.SetIterationTime((total_ms_double / total_jobs_double) / 1000.0);
+  });
+
+  }
+}
+
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
     int64_t size = 2000 * 1024 * 1024;
-//    int64_t min = 1;
-//    int64_t max = std::thread::hardware_concurrency();
 
     std::vector<int64_t> job_nums = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,
@@ -135,6 +185,7 @@ namespace {
 
 }  // namespace
 
-BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 
 }
