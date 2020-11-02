@@ -125,38 +125,39 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
     std::vector<std::thread> threads;
 
     tbb::task_arena arena(num_threads);
-
-    arena.execute([&] {
-      auto start_time = std::chrono::high_resolution_clock::now();
+    auto start_time = std::chrono::high_resolution_clock::now();
 
 
-      for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
-        auto range = tbb::blocked_range<std::vector<uint8_t>::const_iterator>(arrays[job_num].begin(), arrays[job_num].end());
+    for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
+      auto range = tbb::blocked_range<std::vector<uint8_t>::const_iterator>(arrays[job_num].begin(), arrays[job_num].end());
 
-        threads.push_back(std::thread([&, job_num] {
-          tbb::parallel_reduce(range, uint64_t(0),
-          [&](const auto &range, uint64_t partial_sum) -> uint64_t {
-          return std::accumulate(range.begin(), range.end(), partial_sum);
-          }, std::plus<>());
+      threads.push_back(std::thread([&, job_num] {
+        arena.execute([&, job_num] {
+          tbb::parallel_reduce(
+              range, uint64_t(0),
+              [&](const auto &range, uint64_t partial_sum) -> uint64_t {
+                return std::accumulate(range.begin(), range.end(), partial_sum);
+              },
+              std::plus<>());
 
           end_time[job_num] = std::chrono::high_resolution_clock::now();
-        }));
+        });
+      }));
 
-      }
+    }
 
-      for (uint64_t job_num = 0; job_num < num_jobs; job_num++)
-        threads[job_num].join();
+    for (uint64_t job_num = 0; job_num < num_jobs; job_num++)
+      threads[job_num].join();
 
-      uint64_t total_ms = 0;
-      for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
-        total_ms += std::chrono::duration_cast<std::chrono::milliseconds>(end_time[job_num] - start_time).count();
-      }
+    uint64_t total_ms = 0;
+    for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
+      total_ms += std::chrono::duration_cast<std::chrono::milliseconds>(end_time[job_num] - start_time).count();
+    }
 
-      double total_ms_double = static_cast<double>(total_ms);
-      double total_jobs_double = static_cast<double>(num_jobs);
+    double total_ms_double = static_cast<double>(total_ms);
+    double total_jobs_double = static_cast<double>(num_jobs);
 
-      state.SetIterationTime((total_ms_double / total_jobs_double) / 1000.0);
-  });
+    state.SetIterationTime((total_ms_double / total_jobs_double) / 1000.0);
 
   }
 }
