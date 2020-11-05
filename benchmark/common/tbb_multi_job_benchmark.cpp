@@ -119,19 +119,26 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
   for (uint64_t i = 0; i < num_jobs; i++)
     arrays.emplace_back(parallel_load(size));
 
+  std::vector<uint64_t> num_threads_per_job(num_jobs);
+  std::vector<std::chrono::time_point<std::chrono::high_resolution_clock>> end_time(num_jobs);
+  for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
+    num_threads_per_job[job_num] = 0;
+  }
+
+  for (uint64_t i = 0; i < num_threads; i++) {
+    num_threads_per_job[i % num_jobs]++;
+  }
+
   for (auto _ : state) {
     // Create thread pool.
     std::vector<std::chrono::time_point<std::chrono::high_resolution_clock>> end_time(num_jobs);
-    std::vector<std::thread> threads;
-
-    tbb::task_arena arena(num_threads);
-    auto start_time = std::chrono::high_resolution_clock::now();
+    common::TaskQueue queue;
 
 
     for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
       auto range = tbb::blocked_range<std::vector<uint8_t>::const_iterator>(arrays[job_num].begin(), arrays[job_num].end());
-
-      threads.push_back(std::thread([&, job_num] {
+      queue.emplace([&, job_num] {
+        tbb::task_arena arena(std::max<int>(num_threads_per_job[job_num], 1));
         arena.execute([&, job_num] {
           tbb::parallel_reduce(
               range, uint64_t(0),
@@ -142,12 +149,15 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
 
           end_time[job_num] = std::chrono::high_resolution_clock::now();
         });
-      }));
+      });
 
     }
 
-    for (uint64_t job_num = 0; job_num < num_jobs; job_num++)
-      threads[job_num].join();
+    auto start_time = std::chrono::high_resolution_clock::now();
+
+    common::WorkerPool pool(num_threads, queue);
+    pool.Startup();
+    pool.WaitUntilAllFinished();
 
     uint64_t total_ms = 0;
     for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
