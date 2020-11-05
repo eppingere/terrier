@@ -169,6 +169,8 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
 
     state.SetIterationTime((total_ms_double / total_jobs_double) / 1000.0);
 
+    std::cerr << num_threads << ", " << num_jobs << ", " << (total_ms_double / total_jobs_double) << std::endl;
+
   }
 }
 
