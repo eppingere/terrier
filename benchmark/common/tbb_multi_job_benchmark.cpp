@@ -105,6 +105,8 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
 
     state.SetIterationTime((total_ms_double / total_jobs_double) / 1000.0);
 
+    std::cerr << num_threads << ", " << num_jobs << ", " << (total_ms_double / total_jobs_double) << std::endl;
+
     delete []num_done;
 
   }
@@ -169,15 +171,13 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
 
     state.SetIterationTime((total_ms_double / total_jobs_double) / 1000.0);
 
-    std::cerr << num_threads << ", " << num_jobs << ", " << (total_ms_double / total_jobs_double) << std::endl;
-
   }
 }
 
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
-    int64_t size = 2000 * 1024 * 1024;
+    int64_t size = 100 * 1024 * 1024;
 
     std::vector<int64_t> job_nums = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,
