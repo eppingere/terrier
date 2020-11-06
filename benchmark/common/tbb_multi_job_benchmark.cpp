@@ -95,17 +95,17 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
     pool.Startup();
     pool.WaitUntilAllFinished();
 
-    uint64_t total_ms = 0;
+    uint64_t total_ns = 0;
     for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
-      total_ms += std::chrono::duration_cast<std::chrono::milliseconds>(end_time[job_num] - start_time).count();
+      total_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time[job_num] - start_time).count();
     }
 
-    double total_ms_double = static_cast<double>(total_ms);
+    double total_ms_double = static_cast<double>(total_ns);
     double total_jobs_double = static_cast<double>(num_jobs);
 
-    state.SetIterationTime((total_ms_double / total_jobs_double) / 1000.0);
+    state.SetIterationTime((total_ms_double / total_jobs_double) / 1000000000.0);
 
-    std::cerr << num_threads << ", " << num_jobs << ", " << (total_ms_double / total_jobs_double) << std::endl;
+    std::cerr << num_threads << ", " << num_jobs << ", " << (total_ms_double / total_jobs_double) / 1000000.0 << std::endl;
 
     delete []num_done;
 
@@ -161,23 +161,24 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
     pool.Startup();
     pool.WaitUntilAllFinished();
 
-    uint64_t total_ms = 0;
+    uint64_t total_ns = 0;
     for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
-      total_ms += std::chrono::duration_cast<std::chrono::milliseconds>(end_time[job_num] - start_time).count();
+      total_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time[job_num] - start_time).count();
     }
 
-    double total_ms_double = static_cast<double>(total_ms);
+    double total_ms_double = static_cast<double>(total_ns);
     double total_jobs_double = static_cast<double>(num_jobs);
 
-    state.SetIterationTime((total_ms_double / total_jobs_double) / 1000.0);
+    state.SetIterationTime((total_ms_double / total_jobs_double) / 1000000000.0);
 
+    std::cerr << num_threads << ", " << num_jobs << ", " << (total_ms_double / total_jobs_double) / 1000000.0 << std::endl;
   }
 }
 
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
-    int64_t size = 2000 * 1024 * 1024;
+    int64_t size = 100 * 1024 * 1024;
 
     std::vector<int64_t> job_nums = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,
@@ -199,7 +200,7 @@ namespace {
 
 }  // namespace
 
-BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
-//BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 
 }
