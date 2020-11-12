@@ -55,8 +55,8 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)(benchmark::State &
   for (uint64_t i = 0; i < num_jobs; i++)
     arrays.emplace_back(parallel_load(size));
 
-  std::string x;
-  std::cin >> x;
+//  std::string x;
+//  std::cin >> x;
 
   for (auto _ : state) {
     // Create thread pool.
