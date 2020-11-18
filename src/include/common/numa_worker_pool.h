@@ -11,6 +11,7 @@
 
 #include "common/macros.h"
 #include "common/worker_pool.h"
+#include "common/numa.h"
 
 namespace terrier::common {
 
@@ -26,6 +27,9 @@ namespace terrier::common {
  */
 class NumaWorkerPool {
  public:
+
+  using NumaTaskQueue = std::vector<std::pair<std::function<void()>, int>>;
+
   /**
    * Initialize the worker pool. You have to call StartUp if you want the threadpool to start.
    *
@@ -33,20 +37,59 @@ class NumaWorkerPool {
    * @param task_queue a queue of tasks
    */
   // NOLINTNEXTLINE  lint thinks it has only one arguement
-  NumaWorkerPool(TaskQueue task_queue)
-      : is_running_(false), task_queue_(std::move(task_queue)), busy_workers_{0}, num_workers_(std::thread::hardware_concurrency()) {
-    // Walk it off, son. We have nothing else to do here...
+  NumaWorkerPool(int num_workers, NumaTaskQueue task_queue)
+      : workers_(num_numa_nodes()), is_running_(true), tasks_(num_numa_nodes()), busy_workers(0), num_workers_(num_workers) {
+
+    for (auto &p : task_queue) {
+      TERRIER_ASSERT(p.second < num_numa_nodes(), "must have valid numa node for task");
+      tasks_[p.second].emplace(p.first);
+    }
+
+    for (int i = 0; i < num_workers_; i++) {
+      int region = i % num_numa_nodes();
+      workers_[region].push_back(std::thread([&, region] {
+        set_thread_affinity(region);
+        std::function<void()> task;
+
+        while (true) {
+          {
+            // grab the lock
+            std::unique_lock<std::mutex> lock(task_lock_);
+            // task_cv_ is notified by new tasks and shutdown command, but lost notify can happen.
+            task_cv_.wait(lock, [&] { return !is_running_ || !tasks_[region].empty(); });
+            if (!is_running_) {
+              // we are shutting down.
+              return;
+            }
+            // Grab a new task
+            task = std::move(tasks_[region].front());
+            tasks_[region].pop();
+            busy_workers++;
+          }
+          // We don't hold locks at this point
+          task();
+          {
+            std::unique_lock<std::mutex> lock(task_lock_);
+            busy_workers--;
+          }
+          // After completing the task, we only need to tell the master thread
+          finished_cv_.notify_one();
+        }
+      }));
+    }
   }
 
   /**
    * Destructor. Wake up all workers and let them finish before it's destroyed.
    */
-  ~WorkerPool() {
+  ~NumaWorkerPool() {
     std::unique_lock<std::mutex> lock(task_lock_);  // grab the lock
     is_running_ = false;                            // signal all the threads to shutdown
     task_cv_.notify_all();                          // wake up all the threads
     lock.unlock();                                  // free the lock
-    for (auto &thread : workers_) thread.join();
+    for (auto &region : workers_)
+      for (auto &thread : region)
+        thread.join();
   }
 
   /**
@@ -60,10 +103,21 @@ class NumaWorkerPool {
     }
     // tell everyone to stop working
     task_cv_.notify_all();
-    for (auto &worker : workers_) {
-      worker.join();
-    }
+    for (auto &worker_region : workers_)
+      for (auto &worker : worker_region)
+        worker.join();
     workers_.clear();
+  }
+
+  void WaitTillFinished() {
+    std::unique_lock<std::mutex> lock(task_lock_);
+    finished_cv_.wait(lock, [&] {
+      if (busy_workers != 0) return false;
+      for (auto &q : tasks_)
+        if (!q.empty())
+          return false;
+      return true;
+    });
   }
 
   /**
@@ -73,35 +127,14 @@ class NumaWorkerPool {
    * @param func the new task
    */
   template <typename F>
-  void SubmitTask(const F &func) {
+  void SubmitTask(const F &func, int region) {
     TERRIER_ASSERT(is_running_, "Only allow to submit task after the thread pool has been started up");
+    TERRIER_ASSERT(region < num_numa_nodes(), "must be valid region");
     {
       std::lock_guard<std::mutex> lock(task_lock_);
-      task_queue_.emplace(std::move(func));
+      tasks_[region].emplace(std::move(func));
     }
     task_cv_.notify_one();
-  }
-
-  /**
-   * Block until all the tasks in the task queue has been completed
-   */
-  void WaitUntilAllFinished() {
-    std::unique_lock<std::mutex> lock(task_lock_);
-    // wait for all the tasks to complete
-
-    // If finished_cv_ is notified by worker threads. Lost notify can happen.
-    finished_cv_.wait(lock, [&] { return busy_workers_ == 0 && task_queue_.empty(); });
-  }
-
-  /**
-   * Change the number of worker threads. It can only be done when the thread pool
-   * if not running.
-   *
-   * @param num the number of worker threads.
-   */
-  void SetNumWorkers(uint32_t num) {
-    TERRIER_ASSERT(!is_running_, "Only allow to set num of workers when the thread pool is not running");
-    num_workers_ = num;
   }
 
  private:
@@ -109,10 +142,11 @@ class NumaWorkerPool {
   std::vector<std::vector<std::thread>> workers_;
   // Flag indicating whether the pool is running
   bool is_running_;
-  // The queue where workers pick up tasks
-  TaskQueue task_queue_;
 
-  uint32_t busy_workers_, num_workers_;
+  // The queue where workers pick up tasks
+  std::vector<std::queue<std::function<void()>>> tasks_;
+
+  uint32_t busy_workers, num_workers_;
 
   std::mutex task_lock_;
 

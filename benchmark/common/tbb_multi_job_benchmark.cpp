@@ -13,6 +13,7 @@
 #include <thread>
 
 #include "common/worker_pool.h"
+#include "common/numa_worker_pool.h"
 
 namespace terrier {
 
@@ -125,7 +126,6 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
     arrays.emplace_back(parallel_load(size));
 
   std::vector<uint64_t> num_threads_per_job(num_jobs);
-  std::vector<std::chrono::time_point<std::chrono::high_resolution_clock>> end_time(num_jobs);
   for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
     num_threads_per_job[job_num] = 0;
   }
@@ -178,6 +178,87 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
   }
 }
 
+BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::State &state) {
+  const uint32_t num_threads = state.range(0);
+  uint64_t size = static_cast<uint64_t>(state.range(1));
+  uint64_t num_jobs = static_cast<uint64_t>(state.range(2));
+
+  std::vector<std::vector<uint8_t>> arrays;
+  for (uint64_t i = 0; i < num_jobs; i++) {
+    int region = i % common::num_numa_nodes();
+    auto t = std::thread([&, region] {
+      common::set_thread_affinity(region);
+
+      std::vector<uint8_t> v(size);
+      for (uint64_t j = 0; j < size; j++)
+        v[j] = static_cast<uint8_t>(j);
+
+      arrays.emplace_back(v);
+    });
+
+    t.join();
+  }
+
+
+//  std::string x;
+//  std::cin >> x;
+
+  for (auto _ : state) {
+    // Create thread pool.
+    std::atomic<uint64_t>* num_done = new std::atomic<uint64_t>[num_jobs];
+    std::vector<uint64_t> num_threads_per_job(num_jobs);
+    std::vector<std::chrono::time_point<std::chrono::high_resolution_clock>> end_time(num_jobs);
+    for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
+      num_done[job_num] = 0;
+      num_threads_per_job[job_num] = 0;
+    }
+
+    for (uint64_t i = 0; i < num_threads; i++) {
+      num_threads_per_job[i % num_jobs]++;
+    }
+
+    common::NumaWorkerPool::NumaTaskQueue queue;
+
+
+    for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
+      uint64_t num_threads_for_job = std::max<uint64_t>(1, num_threads_per_job[job_num]);
+      for (uint64_t thread_id = 0; thread_id < num_threads_for_job; thread_id++)
+        queue.push_back({[&, thread_id, job_num, num_threads_for_job] {
+          uint64_t start_index = (arrays[job_num].size() / num_threads_for_job) * thread_id;
+          uint64_t end_index = (arrays[job_num].size() / num_threads_for_job) * (thread_id + 1);
+          uint64_t sum = sum_restricted(arrays[job_num].data(), start_index, end_index);
+          benchmark::DoNotOptimize(sum);
+          uint64_t now_done = ++num_done[job_num];
+          if (now_done == num_threads_for_job) {
+            end_time[job_num] = std::chrono::high_resolution_clock::now();
+          }
+        }, job_num % common::num_numa_nodes()});
+    }
+
+//    std::cout << "num jobs: " << num_jobs << std::endl;
+//    std::cout << "queue size: " << queue.size() << std::endl;
+    TERRIER_ASSERT(queue.size() >= num_threads, "there should be as many jobs as threads");
+    auto start_time = std::chrono::high_resolution_clock::now();
+    common::NumaWorkerPool pool(num_threads, queue);
+    pool.WaitTillFinished();
+
+    uint64_t total_ns = 0;
+    for (uint64_t job_num = 0; job_num < num_jobs; job_num++) {
+      total_ns += std::chrono::duration_cast<std::chrono::nanoseconds>(end_time[job_num] - start_time).count();
+    }
+
+    double total_ms_double = static_cast<double>(total_ns);
+    double total_jobs_double = static_cast<double>(num_jobs);
+
+    state.SetIterationTime((total_ms_double / total_jobs_double) / 1000000000.0);
+
+    std::cerr << num_threads << ", " << num_jobs << ", " << (total_ms_double / total_jobs_double) / 1000000.0 << std::endl;
+
+    delete []num_done;
+
+  }
+}
+
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
@@ -206,12 +287,13 @@ namespace {
 //      }
 //    }
 
-    b->Args({80, size, 80});
+    b->Args({std::thread::hardware_concurrency(), size, std::thread::hardware_concurrency()});
   }
 
 }  // namespace
 
 BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 
 }
