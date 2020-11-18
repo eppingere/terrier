@@ -186,7 +186,13 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
   std::vector<uint8_t*> arrays;
   for (uint64_t i = 0; i < num_jobs; i++) {
     int region = i % common::num_numa_nodes();
-    arrays.push_back(new uint8_t[size]);
+    uint8_t *a;
+#ifdef __APPLE__
+    a = new uint8_t[size];
+#else
+    a = static_cast<uint8_t *>(numa_alloc_onnode(size, region));
+#endif
+    arrays.push_back(a);
   }
 
 
