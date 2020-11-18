@@ -203,6 +203,8 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
 //  std::string x;
 //  std::cin >> x;
 
+  common::NumaWorkerPool pool(num_threads, {});
+
   for (auto _ : state) {
     // Create thread pool.
     std::atomic<uint64_t>* num_done = new std::atomic<uint64_t>[num_jobs];
@@ -239,7 +241,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
 //    std::cout << "queue size: " << queue.size() << std::endl;
     TERRIER_ASSERT(queue.size() >= num_threads, "there should be as many jobs as threads");
     auto start_time = std::chrono::high_resolution_clock::now();
-    common::NumaWorkerPool pool(num_threads, queue);
+    for (auto &p : queue) pool.SubmitTask(p.first, p.second);
     pool.WaitTillFinished();
 
     uint64_t total_ns = 0;
