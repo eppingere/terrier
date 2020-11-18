@@ -31,7 +31,7 @@ namespace terrier::common {
     TERRIER_ASSERT(region < num_numa_nodes(), "must be valid region");
 #ifndef __APPLE__
     int cpu_id = -1;
-    for (int cpu = 0; cpu < std::thread::hardware_concurrency(); cpu++) {
+    for (uint32_t cpu = 0; cpu < std::thread::hardware_concurrency(); cpu++) {
       if (region_of_cpu(cpu) == region) {
         if (cpu_id == -1 || !num_pinned_threads_.count() ||
             num_pinned_threads_[cpu] < num_pinned_threads_[cpu_id]) {
@@ -39,7 +39,7 @@ namespace terrier::common {
         }
       }
     }
-    TERRIER_ASSERT(cpu_id != -1; "should be at least 1 valid cpu");
+    TERRIER_ASSERT(cpu_id != -1, "should be at least 1 valid cpu");
 
     cpu_set_t mask;
     CPU_ZERO(&mask);

@@ -45,7 +45,7 @@ class NumaWorkerPool {
       tasks_[p.second].emplace(p.first);
     }
 
-    for (int i = 0; i < num_workers_; i++) {
+    for (uint32_t i = 0; i < num_workers_; i++) {
       int region = i % num_numa_nodes();
       workers_[region].push_back(std::thread([&, region] {
         set_thread_affinity(region);
