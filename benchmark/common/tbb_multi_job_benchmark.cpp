@@ -190,7 +190,11 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
 #ifdef __APPLE__
     a = new uint8_t[size];
 #else
-    a = static_cast<uint8_t *>(numa_alloc_onnode(size, region));
+    if (numa_available() == -1) {
+      a = new uint8_t[size];
+    } else {
+      a = static_cast<uint8_t *>(numa_alloc_onnode(size, region));
+    }
 #endif
     arrays.push_back(a);
   }
@@ -262,7 +266,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
-    int64_t size = 200 * 1024 * 1024;
+    int64_t size = 2000 * 1024 * 1024;
 
     std::vector<int64_t> job_nums = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,
@@ -292,8 +296,8 @@ namespace {
 
 }  // namespace
 
-BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
-BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 
 }
