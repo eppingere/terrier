@@ -262,7 +262,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
-    int64_t size = 100 * 1024 * 1024;
+    int64_t size = 2000 * 1024 * 1024;
 
     std::vector<int64_t> job_nums = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,
