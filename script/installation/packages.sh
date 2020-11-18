@@ -53,6 +53,8 @@ LINUX_BUILD_PACKAGES=(\
   "postgresql-client" \
   "wget" \
   "python3-pip" \
+  "numactl" \
+  "libnuma-dev" \
 )
 LINUX_TEST_PACKAGES=(\
   "ant" \
