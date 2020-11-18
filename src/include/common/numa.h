@@ -33,7 +33,7 @@ namespace terrier::common {
     int cpu_id = -1;
     for (uint32_t cpu = 0; cpu < std::thread::hardware_concurrency(); cpu++) {
       if (region_of_cpu(cpu) == region) {
-        if (cpu_id == -1 || !num_pinned_threads_.count() ||
+        if (cpu_id == -1 || !num_pinned_threads_.count(cpu) ||
             num_pinned_threads_[cpu] < num_pinned_threads_[cpu_id]) {
           cpu_id = cpu;
         }
