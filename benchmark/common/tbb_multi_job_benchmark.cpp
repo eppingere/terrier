@@ -183,20 +183,10 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
   uint64_t size = static_cast<uint64_t>(state.range(1));
   uint64_t num_jobs = static_cast<uint64_t>(state.range(2));
 
-  std::vector<std::vector<uint8_t>> arrays;
+  std::vector<uint8_t*> arrays;
   for (uint64_t i = 0; i < num_jobs; i++) {
     int region = i % common::num_numa_nodes();
-    auto t = std::thread([&, region] {
-      common::set_thread_affinity(region);
-
-      std::vector<uint8_t> v(size);
-      for (uint64_t j = 0; j < size; j++)
-        v[j] = static_cast<uint8_t>(j);
-
-      arrays.emplace_back(v);
-    });
-
-    t.join();
+    arrays.push_back(new uint8_t[size]);
   }
 
 
@@ -226,9 +216,9 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
       uint64_t num_threads_for_job = std::max<uint64_t>(1, num_threads_per_job[job_num]);
       for (uint64_t thread_id = 0; thread_id < num_threads_for_job; thread_id++)
         queue.push_back({[&, thread_id, job_num, num_threads_for_job] {
-          uint64_t start_index = (arrays[job_num].size() / num_threads_for_job) * thread_id;
-          uint64_t end_index = (arrays[job_num].size() / num_threads_for_job) * (thread_id + 1);
-          uint64_t sum = sum_restricted(arrays[job_num].data(), start_index, end_index);
+          uint64_t start_index = (size / num_threads_for_job) * thread_id;
+          uint64_t end_index = (size / num_threads_for_job) * (thread_id + 1);
+          uint64_t sum = sum_restricted(arrays[job_num], start_index, end_index);
           benchmark::DoNotOptimize(sum);
           uint64_t now_done = ++num_done[job_num];
           if (now_done == num_threads_for_job) {
@@ -259,12 +249,14 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
     delete []num_done;
 
   }
+
+  for (auto &a : arrays) delete []a;
 }
 
 namespace {
 
   static void CustomArguments(benchmark::internal::Benchmark *b) {
-    int64_t size = 2000 * 1024 * 1024;
+    int64_t size = 200 * 1024 * 1024;
 
     std::vector<int64_t> job_nums = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,
