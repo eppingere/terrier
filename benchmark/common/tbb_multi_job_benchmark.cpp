@@ -196,6 +196,9 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
       a = static_cast<uint8_t *>(numa_alloc_onnode(size, region));
     }
 #endif
+    for (uint64_t j = 0; j < size; j++) {
+      a[j] = static_cast<uint8_t>(j);
+    }
     arrays.push_back(a);
   }
 
