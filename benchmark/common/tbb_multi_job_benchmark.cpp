@@ -196,9 +196,11 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
       a = static_cast<uint8_t *>(numa_alloc_onnode(size, region));
     }
 #endif
+    std::cout << "block allocated" << std::endl;
     for (uint64_t j = 0; j < size; j++) {
       a[j] = static_cast<uint8_t>(j);
     }
+    std::cout << "done allocating" << std::endl;
     arrays.push_back(a);
   }
 
