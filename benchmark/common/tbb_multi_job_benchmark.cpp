@@ -206,8 +206,8 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
   }
 
 
-//  std::string x;
-//  std::cin >> x;
+  std::string x;
+  std::cin >> x;
 
   common::NumaWorkerPool pool(num_threads, {});
 
