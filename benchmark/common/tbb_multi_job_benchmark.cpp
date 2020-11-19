@@ -178,30 +178,31 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)(benchmark::State &state) 
   }
 }
 
+static std::vector<uint8_t *> arrays_;
+
 BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::State &state) {
   const uint32_t num_threads = state.range(0);
   uint64_t size = static_cast<uint64_t>(state.range(1));
   uint64_t num_jobs = static_cast<uint64_t>(state.range(2));
 
-  std::vector<uint8_t*> arrays;
-  for (uint64_t i = 0; i < num_jobs; i++) {
-    int region = i % common::num_numa_nodes();
-    uint8_t *a;
+  if (arrays_.size() != std::thread::hardware_concurrency()) {
+    for (uint64_t i = 0; i < num_jobs; i++) {
+      int region = i % common::num_numa_nodes();
+      uint8_t *a;
 #ifdef __APPLE__
-    a = new uint8_t[size];
-#else
-    if (numa_available() == -1) {
       a = new uint8_t[size];
-    } else {
-      a = static_cast<uint8_t *>(numa_alloc_onnode(size, region));
-    }
+#else
+      if (numa_available() == -1) {
+        a = new uint8_t[size];
+      } else {
+        a = static_cast<uint8_t *>(numa_alloc_onnode(size, region));
+      }
 #endif
-    std::cout << "block allocated" << std::endl;
-    for (uint64_t j = 0; j < size; j++) {
-      a[j] = static_cast<uint8_t>(j);
+      for (uint64_t j = 0; j < size; j++) {
+        a[j] = static_cast<uint8_t>(j);
+      }
+      arrays_.push_back(a);
     }
-    std::cout << "done allocating" << std::endl;
-    arrays.push_back(a);
   }
 
 
@@ -233,7 +234,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
         queue.push_back({[&, thread_id, job_num, num_threads_for_job] {
           uint64_t start_index = (size / num_threads_for_job) * thread_id;
           uint64_t end_index = (size / num_threads_for_job) * (thread_id + 1);
-          uint64_t sum = sum_restricted(arrays[job_num], start_index, end_index);
+          uint64_t sum = sum_restricted(arrays_[job_num], start_index, end_index);
           benchmark::DoNotOptimize(sum);
           uint64_t now_done = ++num_done[job_num];
           if (now_done == num_threads_for_job) {
@@ -242,8 +243,6 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
         }, job_num % common::num_numa_nodes()});
     }
 
-//    std::cout << "num jobs: " << num_jobs << std::endl;
-//    std::cout << "queue size: " << queue.size() << std::endl;
     TERRIER_ASSERT(queue.size() >= num_threads, "there should be as many jobs as threads");
     auto start_time = std::chrono::high_resolution_clock::now();
     for (auto &p : queue) pool.SubmitTask(p.first, p.second);
@@ -265,7 +264,6 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
 
   }
 
-  for (auto &a : arrays) delete []a;
 }
 
 namespace {
