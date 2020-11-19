@@ -186,7 +186,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
   uint64_t num_jobs = static_cast<uint64_t>(state.range(2));
 
   if (arrays_.size() != std::thread::hardware_concurrency()) {
-    for (uint64_t i = 0; i < num_jobs; i++) {
+    for (uint64_t i = 0; i < std::thread::hardware_concurrency(); i++) {
       int region = i % common::num_numa_nodes();
       uint8_t *a;
 #ifdef __APPLE__
