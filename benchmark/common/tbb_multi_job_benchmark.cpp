@@ -206,8 +206,8 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
   }
 
 
-  std::string x;
-  std::cin >> x;
+//  std::string x;
+//  std::cin >> x;
 
   common::NumaWorkerPool pool(num_threads, {});
 
@@ -281,12 +281,12 @@ namespace {
 //        25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80,
     };
 
-//    for (int64_t num_threads = 1; num_threads <= std::thread::hardware_concurrency(); num_threads++) {
-//      for (int64_t num_jobs = 1; num_jobs <= std::thread::hardware_concurrency(); num_jobs++) {
-//        if ((num_threads / num_jobs) * num_jobs == num_threads)
-//          b->Args({num_threads, size, num_jobs});
-//      }
-//    }
+    for (int64_t num_threads = 1; num_threads <= std::thread::hardware_concurrency(); num_threads++) {
+      for (int64_t num_jobs = 1; num_jobs <= std::thread::hardware_concurrency(); num_jobs++) {
+        if ((num_threads / num_jobs) * num_jobs == num_threads)
+          b->Args({num_threads, size, num_jobs});
+      }
+    }
 
 //    for (auto & num_jobs : job_nums) {
 //      for (auto & num_threads : thread_nums) {
@@ -294,7 +294,7 @@ namespace {
 //      }
 //    }
 
-    b->Args({std::thread::hardware_concurrency(), size, std::thread::hardware_concurrency()});
+//    b->Args({std::thread::hardware_concurrency(), size, std::thread::hardware_concurrency()});
   }
 
 }  // namespace
