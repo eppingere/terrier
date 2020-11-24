@@ -266,9 +266,179 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)(benchmark::Sta
 
 }
 
+BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLLATENCYBENCHMARK)(benchmark::State &state) {
+  const uint32_t NUM_TABLES = 5;
+  const uint32_t NUM_THREADS = std::thread::hardware_concurrency();
+  const uint32_t NUM_CLIENTS = 2000;
+
+  std::default_random_engine generator;
+  uint64_t average_size = (1024 * 1024 * 1024 * std::thread::hardware_concurrency()) / NUM_TABLES;
+  std::normal_distribution<double> distribution(average_size,average_size / 5);
+
+  common::NumaWorkerPool pool(NUM_THREADS, {});
+
+  std::vector<uint8_t> tables[NUM_TABLES];
+  for (uint32_t i = 0; i < NUM_TABLES; i++) {
+    uint64_t i_size = static_cast<uint64_t>(std::max<double>(0.0, distribution(generator)));
+    pool.SubmitTask([&, i, i_size] {
+      tables[i] = std::vector<uint8_t>(i_size);
+      for (uint64_t idx = 0; idx < i_size; idx++) {
+        tables[i][idx] = static_cast<uint8_t>(idx);
+      }
+    }, i % common::num_numa_nodes());
+  }
+
+  pool.WaitTillFinished();
+
+  std::atomic_bool done = false;
+
+  std::vector<std::thread> threads;
+  std::vector<double> ms_waited(NUM_CLIENTS);
+  std::vector<uint64_t> num_items(NUM_CLIENTS);
+  std::vector<uint64_t> num_jobs(NUM_CLIENTS);
+  for (auto &i : ms_waited) i = 0.0;
+  for (auto &i : num_items) i = 0;
+  for (auto &i : num_jobs) i = 0;
+
+  for (uint32_t i = 0; i < NUM_CLIENTS; i++) {
+    threads.emplace_back([&, i] {
+      std::default_random_engine gen;
+      std::uniform_int_distribution<uint64_t> table_distro(0, NUM_TABLES - 1);
+
+      while (!done) {
+        uint64_t table_i = table_distro(gen);
+        std::condition_variable done_cv;
+        std::mutex l;
+        std::unique_lock<std::mutex> lock(l);
+
+        auto start_time = std::chrono::high_resolution_clock::now();
+        pool.SubmitTask([&] {
+          sum_restricted(tables[table_i].data(), 0, tables[table_i].size());
+
+          std::unique_lock<std::mutex> lock(l);
+          done_cv.notify_all();
+        }, table_i % common::num_numa_nodes());
+
+        done_cv.wait(lock);
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        ms_waited[i] += std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+        num_items[i] += tables[table_i].size();
+        num_jobs[i]++;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+
+    });
+  }
+
+  std::this_thread::sleep_for(std::chrono::minutes(5));
+
+  done = true;
+
+  for (auto &thread : threads) thread.join();
+
+  pool.WaitTillFinished();
+
+  uint64_t items = 0;
+  double total_ms = 0.0;
+  for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
+    items += num_jobs[i];
+    total_ms += ms_waited[i];
+  }
+
+  std::cerr << items << ", " << total_ms << std::endl;
+
+}
+
+BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLLATENCYBENCHMARK)(benchmark::State &state) {
+  const uint32_t NUM_TABLES = 5;
+  const uint32_t NUM_THREADS = std::thread::hardware_concurrency();
+  const uint32_t NUM_CLIENTS = 500;
+
+  std::default_random_engine generator;
+  uint64_t average_size = (1024 * 1024 * 1024 * std::thread::hardware_concurrency()) / NUM_TABLES;
+  std::normal_distribution<double> distribution(average_size,average_size / 5);
+
+  common::WorkerPool pool(NUM_THREADS, {});
+
+  std::vector<uint8_t> tables[NUM_TABLES];
+  for (uint32_t i = 0; i < NUM_TABLES; i++) {
+    uint64_t i_size = static_cast<uint64_t>(std::max<double>(0.0, distribution(generator)));
+    pool.SubmitTask([&, i, i_size] {
+      tables[i] = std::vector<uint8_t>(i_size);
+      for (uint64_t idx = 0; idx < i_size; idx++) {
+        tables[i][idx] = static_cast<uint8_t>(idx);
+      }
+    });
+  }
+
+  pool.WaitUntilAllFinished();
+
+  std::atomic_bool done = false;
+
+  std::vector<std::thread> threads;
+  std::vector<double> ms_waited(NUM_CLIENTS);
+  std::vector<uint64_t> num_items(NUM_CLIENTS);
+  std::vector<uint64_t> num_jobs(NUM_CLIENTS);
+  for (auto &i : ms_waited) i = 0.0;
+  for (auto &i : num_items) i = 0;
+  for (auto &i : num_jobs) i = 0;
+
+  for (uint32_t i = 0; i < NUM_CLIENTS; i++) {
+    threads.emplace_back([&, i] {
+      std::default_random_engine gen;
+      std::uniform_int_distribution<uint64_t> table_distro(0, NUM_TABLES - 1);
+
+      while (!done) {
+        uint64_t table_i = table_distro(gen);
+        std::condition_variable done_cv;
+        std::mutex l;
+        std::unique_lock<std::mutex> lock(l);
+
+        auto start_time = std::chrono::high_resolution_clock::now();
+        pool.SubmitTask([&] {
+          sum_restricted(tables[table_i].data(), 0, tables[table_i].size());
+
+          std::unique_lock<std::mutex> lock(l);
+          done_cv.notify_all();
+        });
+
+        done_cv.wait(lock);
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        ms_waited[i] += std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+        num_items[i] += tables[table_i].size();
+        num_jobs[i]++;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+
+    });
+  }
+
+  std::this_thread::sleep_for(std::chrono::minutes(30));
+
+  done = true;
+
+  for (auto &thread : threads) thread.join();
+
+  pool.WaitUntilAllFinished();
+
+  uint64_t items = 0;
+  double total_ms = 0.0;
+  for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
+    items += num_jobs[i];
+    total_ms += ms_waited[i];
+  }
+
+  std::cerr << items << ", " << total_ms << std::endl;
+
+}
+
 namespace {
 
-  static void CustomArguments(benchmark::internal::Benchmark *b) {
+  UNUSED_ATTRIBUTE static void CustomArguments(benchmark::internal::Benchmark *b) {
     int64_t size = 1000 * 1024 * 1024;
 
     std::vector<int64_t> job_nums = {
@@ -299,8 +469,10 @@ namespace {
 
 }  // namespace
 
-//BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
 BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLLATENCYBENCHMARK)->Iterations(1)->Unit(benchmark::kMillisecond);
+//BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLLATENCYBENCHMARK)->Iterations(1)->Unit(benchmark::kMillisecond);
 
 }
