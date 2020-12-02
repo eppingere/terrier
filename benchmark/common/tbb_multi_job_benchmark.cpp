@@ -439,7 +439,7 @@ BENCHMARK_DEFINE_F(TBBMULTIJOBBENCHMARK, THREADPOOLLATENCYBENCHMARK)(benchmark::
 namespace {
 
   UNUSED_ATTRIBUTE static void CustomArguments(benchmark::internal::Benchmark *b) {
-    int64_t size = 1000 * 1024 * 1024;
+    int64_t size = 2000 * 1024 * 1024;
 
     std::vector<int64_t> job_nums = {
         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20,
@@ -452,10 +452,10 @@ namespace {
     };
 
     for (int64_t num_threads = 1; num_threads <= std::thread::hardware_concurrency(); num_threads++) {
-      for (int64_t num_jobs = 1; num_jobs <= std::thread::hardware_concurrency(); num_jobs++) {
-        if ((num_threads / num_jobs) * num_jobs == num_threads)
-          b->Args({num_threads, size, num_jobs});
-      }
+//      for (int64_t num_jobs = 1; num_jobs <= std::thread::hardware_concurrency(); num_jobs++) {
+//        if ((num_threads / num_jobs) * num_jobs == num_threads)
+          b->Args({num_threads, size, num_threads});
+//      }
     }
 
 //    for (auto & num_jobs : job_nums) {
@@ -469,7 +469,7 @@ namespace {
 
 }  // namespace
 
-BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(50)->Unit(benchmark::kMillisecond);
+BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, THREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, TBBBENCHMARK)->Apply(CustomArguments)->Iterations(5)->Unit(benchmark::kMillisecond);
 //BENCHMARK_REGISTER_F(TBBMULTIJOBBENCHMARK, NUMATHREADPOOLLATENCYBENCHMARK)->Iterations(1)->Unit(benchmark::kMillisecond);
